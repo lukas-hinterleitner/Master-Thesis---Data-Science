@@ -1,0 +1,83 @@
+%here you can find some useful additional packages and macros
+
+%Package to show algorithms
+\usepackage{algorithm2e}
+
+%package to work with glossaries
+\usepackage[acronym]{glossaries}
+
+%packages and setings to show colored code
+\usepackage{listings}
+\usepackage{xcolor}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+
+\lstset{style=mystyle}
+
+%package to allow comments/notes by you and other people
+\usepackage[multiuser,marginclue,nomargin,inline,index]{fixme}
+\definecolor{ttwgreen}{RGB}{75,135,73}
+\fxusetheme{colorsig}
+%\FXRegisterAuthor{tm}{atm}{\color{red}TM}
+\FXRegisterAuthor{ttw}{attw}{\color{ttwgreen}TTW} % creates ttwnote, ttwwarning, ttwerror, ttwfatal commands
+%\FXRegisterAuthor{mk}{amk}{\color{blue}MK}
+
+%add your own packages or macros here
+\usepackage{amssymb}
+
+\SetKwComment{Comment}{/* }{ */}
+\RestyleAlgo{ruled}
+
+\newcommand*{\W}{\mathbf{W}}
+
+\newcommand*{\Wlk}{\W^{(l,k)}}
+\newcommand*{\Wlonekone}{\W^{(l_1,k_1)}}
+\newcommand*{\Wltwoktwo}{\W^{(l_2,k_2)}}
+\newcommand*{\nWlk}{n_{\Wlk}}
+\newcommand*{\dWlk}{d_{\Wlk}}
+\newcommand*{\nWlkXdWlk}{\nWlk \times \dWlk}
+\newcommand*{\RnWlkXdWlk}{\mathbb{R}^{\nWlkXdWlk}}
+
+\newcommand*{\vWlk}{\vX[\Wlk]}
+
+\newcommand*{\si}{s_i}
+\newcommand*{\spi}{s_{p_i}}
+\newcommand*{\smi}{s_{m_i}}
+
+\newcommand*{\sj}{s_j}
+\newcommand*{\spj}{s_{p_j}}
+\newcommand*{\smj}{s_{m_j}}
+
+\newcommand*{\vXsi}[1][\theta]{\mathbf{v}_{#1}(\si)}
+\newcommand*{\vXspi}[1][\theta]{\mathbf{v}_{#1}(\spi)}
+\newcommand*{\vXsmi}[1][\theta]{\mathbf{v}_{#1}(\smi)}
+
+\newcommand*{\vXsj}[1][\theta]{\mathbf{v}_{#1}(\sj)}
+\newcommand*{\vXspj}[1][\theta]{\mathbf{v}_{#1}(\spj)}
+\newcommand*{\vXsmj}[1][\theta]{\mathbf{v}_{#1}(\smj)}
+
+\newcommand*{\simcos}{\operatorname{sim}_{\cos}}
+
+\newcommand{\Indic}{\mathbf{1}}

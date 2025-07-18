@@ -1,0 +1,39 @@
+\chapter{Methodology - Experimental Setup}
+asdf
+
+\section{HuggingFace as a general Model and Data Provider}
+asdf
+
+\subsection{OLMo}
+asdf
+
+\subsection{LIMA Dataset}
+asdf
+
+\section{Paraphrasing Samples}\label{sec:paraphrasing_samples}
+OpenAI GPT-4o-mini
+
+\section{Preparing the Data}
+asdf
+
+\subsection{Supervised Finetuning Setup}
+asdf
+
+\subsubsection{User/Assistant-Message-Format}
+\fxnote{show examples of user-assistant messages, etc.}
+
+\subsection{Open-Instruct}
+asdf
+
+\section{Instance- and Gradient-based Explanation}
+asdf
+
+\subsection{High Dimensionality}\label{subsec:high_dimensionality}
+\fxnote{mention gradient caching on disk and why it's not suitable}
+
+\subsection{BM25-selected Samples}\label{subsec:setup_bm25}
+\fxnote{reduce execution time by selection top-n BM25 selected samples}
+
+\subsection{Intermediate Results}\label{subsec:intermediate_results}
+
+\fxnote{dot products (per layer) as intermediate results to compute gradient cosine similarity later on because full gradients have to be stored for each sample and each gradient is as big as the model size}
