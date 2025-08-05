@@ -5,9 +5,9 @@
 asdf
 
 \subsection{OLMo}
-The \emph{OLMo} model series, developed by the \emph{Allen Institute for AI}, provides open-source \acrshort{llm}s along with their training data and comprehensive training pipelines~\cite{Groeneveld2023OLMo}. These features make OLMo models particularly suitable for research focused on explainability. Specifically, OLMo models are pre-trained on the \emph{Dolma} dataset, which comprises approximately three trillion tokens collected from diverse sources~\cite{dolma}. To adapt these models to specific tasks, the \emph{Open Instruct} framework combined with the \emph{TÜLU} dataset is employed for fine-tuning~\cite{ivison2023camels}.
+The OLMo model series, developed by the \emph{Allen Institute for AI}, provides open-source \acrshort{llm}s along with their training data and comprehensive training pipelines~\cite{Groeneveld2023OLMo}. These features make OLMo models particularly suitable for research focused on explainability. Specifically, OLMo models are pre-trained on the \emph{Dolma} dataset, which comprises approximately three trillion tokens collected from diverse sources~\cite{dolma}. To adapt these models to specific tasks, the \emph{Open Instruct} framework combined with the \emph{TÜLU} dataset is employed for fine-tuning~\cite{ivison2023camels}.
 \\\\
-In this article, the focus is on the \emph{AMD-OLMo-1B-SFT} model from AMD, which is derived from the original \emph{OLMo-1B} architecture, as detailed in Table~\ref{tab:model_architecture_olmo_1b_amd}. This specific model was pre-trained using the \emph{Dolma v1.7} dataset, consisting of 1.3 trillion tokens, and subsequently fine-tuned through supervised training on the \emph{TÜLU v2} dataset~\cite{AMD-OLMo}.
+In this article, the focus is on the \texttt{AMD-OLMo-1B-SFT} model from AMD, which is derived from the original \texttt{OLMo-1B} architecture, as detailed in Table~\ref{tab:model_architecture_olmo_1b_amd}. This specific model was pre-trained using the \emph{Dolma v1.7} dataset, consisting of 1.3 trillion tokens, and subsequently fine-tuned through supervised training on the \emph{TÜLU v2} dataset~\cite{AMD-OLMo}.
 \begin{table}[htb]
     \centering
     \begin{tabular}{|c|c|c|c|c|c|}
@@ -19,7 +19,66 @@ In this article, the focus is on the \emph{AMD-OLMo-1B-SFT} model from AMD, whic
     \end{tabular}
     \caption{Model architecture size of AMD-OLMo-1B-SFT}
     \label{tab:model_architecture_olmo_1b_amd}
-\end{table}
+\end{table} 
+The model is loaded using \emph{HuggingFace}\textquotesingle s \emph{transformers} function \texttt{from\_pretrained(\textless model\textgreater)} from the class \texttt{AutoModelForCausal}, where \texttt{model} is the model name (\texttt{AMD-OLMo-1B-SFT}). It allows published models with corresponding pre-trained weights to be downloaded and further adapted using \emph{PyTorch}. The complete model architecture when loaded with the \emph{transformers} and printed on the console looks like:
+\begin{verbatim}
+OlmoForCausalLM(
+  (model): OlmoModel(
+    (embed_tokens): Embedding(50304, 2048, padding_idx=1)
+    (layers): ModuleList(
+      (0-15): 16 x OlmoDecoderLayer(
+        (self_attn): OlmoAttention(
+          (q_proj): Linear(in_features=2048, out_features=2048, bias=False)
+          (k_proj): Linear(in_features=2048, out_features=2048, bias=False)
+          (v_proj): Linear(in_features=2048, out_features=2048, bias=False)
+          (o_proj): Linear(in_features=2048, out_features=2048, bias=False)
+        )
+        (mlp): OlmoMLP(
+          (gate_proj): Linear(in_features=2048, out_features=8192, bias=False)
+          (up_proj): Linear(in_features=2048, out_features=8192, bias=False)
+          (down_proj): Linear(in_features=8192, out_features=2048, bias=False)
+          (act_fn): SiLU()
+        )
+        (input_layernorm): OlmoLayerNorm()
+        (post_attention_layernorm): OlmoLayerNorm()
+      )
+    )
+    (norm): OlmoLayerNorm()
+    (rotary_emb): OlmoRotaryEmbedding()
+  )
+  (lm_head): Linear(in_features=2048, out_features=50304, bias=False)
+)
+\end{verbatim}
+As shown above, the model consists of the following trainable components with corresponding dimensionality.
+\begin{itemize}
+    \item \textbf{Input Embedding:} $\mathbf{E} \in \mathbb{R}^{|V| \times d_x}$
+    \item \textbf{16 Decoder Layers ($l = 0, \ldots, 15$):}
+    \begin{itemize}
+        \item \textbf{Attention:}
+        \begin{itemize}
+            \item \textbf{Query-Projection:} \hspace{0.6em} $\mathbf{W}_\text{Q}^{(l)} \in \mathbb{R}^{d_x \times d_x}$
+            \item \textbf{Key-Projection:} \hspace{1.8em} $\mathbf{W}_\text{K}^{(l)} \in \mathbb{R}^{d_x \times d_x}$
+            \item \textbf{Value-Projection:} \hspace{1.3em} $\mathbf{W}_\text{V}^{(l)} \in \mathbb{R}^{d_x \times d_x}$
+            \item \textbf{Output-Projection:} \hspace{0.5em} $\mathbf{W}_\text{O}^{(l)} \in \mathbb{R}^{d_x \times d_x}$
+        \end{itemize}
+        \item \textbf{MLP:}
+        \begin{itemize}
+            \item \textbf{Gate-Projection:} \hspace{1.7em} $\mathbf{W}_\text{gate}^{(l)} \in \mathbb{R}^{d_x \times d_{ff}}$
+            \item \textbf{Up-Projection:} \hspace{2.3em} $\mathbf{W}_\text{up}^{(l)} \in \mathbb{R}^{d_x \times d_{ff}}$
+            \item \textbf{Down-Projection:} \hspace{1.2em} $\mathbf{W}_\text{down}^{(l)} \in \mathbb{R}^{d_{ff} \times d_x}$
+        \end{itemize}
+    \end{itemize}
+    \item \textbf{Output Embedding:} $\mathbf{W}^{(o)} \in \mathbb{R}^{d_x \times |V|}$
+\end{itemize}
+
+Explanation for each:
+
+\begin{itemize}
+\item $|V|$: Vocabulary size (for \texttt{AMD-OLMo-1B-SFT}, $|V| = 50{,}304$).
+\item $d_x$: Hidden size (for \texttt{AMD-OLMo-1B-SFT}, $d_x = 2{,}048$).
+\item $d_{ff}$: Feedforward/MLP hidden width (for \texttt{AMD-OLMo-1B-SFT}, $d_{ff} = 8{,}192$).
+\end{itemize}
+
 
 \fxnote{maybe go more into the detail of the architecture regarding weights, activation function, etc.}
 \fxnote{reference model size equation from previous chapter and establish detailed model size}
@@ -33,7 +92,7 @@ User prompt $s_{0_P}$:
     Can brain cells move? By movement I mean long distance migration 
     (preferably within the brain only).
 \end{verbatim}
-Model generation $s_{0_G}$:
+Model-generation $s_{0_G}$:
 \begin{verbatim}
     The question is relatively broad and one should take into account that 
     the brain not only consists of neurons, but also glial cells 
@@ -65,12 +124,11 @@ Model generation $s_{0_G}$:
 A small portion of the examples contain complete dialogues with multiple prompts and corresponding responses. These are removed from the dataset to keep the classic prompt/generation theme for all examples and to make them comparable. When removing those dialogue examples, the filtered dataset still consists of $N = 988$ query/response pairs.
 
 \subsection{User/Assistant Message Format}\label{subsec:message_format}
-\subsubsection{General Overview}
 
+\subsubsection{General Overview}
 To ensure consistency and compatibility with modern conversational AI frameworks, each example in the dataset is represented as a list of message objects. Every message specifies both a \texttt{role}, indicating whether it originates from the user, the assistant, or optionally the system, and a \texttt{content} field containing the text.As stated previously, the dialogue examples have been filtered to retain exactly one user-assistant exchange per sample, enforcing a single-turn instruction-response structure for all pairs.
 
 \subsubsection{Roles and Their Purpose}
-
 \begin{itemize}
 \item \textbf{system}: An optional message that provides general context or high-level instruction, such as persona or tone guidelines.
 \item \textbf{user}: Represents the prompt or question, serving as the input for which the model must generate a response.
@@ -103,7 +161,7 @@ The \emph{OpenAI} API also follows the message format shown in Subsection~\ref{s
 Section~\ref{subsec:appendix_paraphrased_sample} additionally illustrates the paraphrases for the messages shown in Subsection~\ref{subsec:lima_dataset}. This procedure is then repeated for all samples $\si$ in $D$ to create the dataset $D_p$ first mentioned in Section~\ref{sec:paraphrasing_a_dataset}. To create the dataset $D_m$ for the \emph{model-generated} case, the paraphrased user messages from $D_p$ are input to the model under evaluation. For each paraphrased user message $s_{p_{i_P}}$, the model generates a new assistant message $s_{m_{i_G}}$.
 
 \subsection{Prepare Model-generated Data Point}\label{subsec:prepare_model_input}
-Before the user message can be picked up by the model, some modifications are made to the sample. Usually, the user message is embedded inside a form of tag that tells the model where the user message starts and ends. How these tags are formatted and applied differs from model to model in the corresponding training pipeline. In the case of \emph{AMD-OLMo-1B-SFT}, it looks like:
+Before the user message can be picked up by the model, some modifications are made to the sample. Usually, the user message is embedded inside a form of tag that tells the model where the user message starts and ends. How these tags are formatted and applied differs from model to model in the corresponding training pipeline. In the case of \texttt{AMD-OLMo-1B-SFT}, it looks like:
 \begin{verbatim}
     <|user|>\n
     Are brain cells capable of moving? 
@@ -111,7 +169,7 @@ Before the user message can be picked up by the model, some modifications are ma
     ideally occurring within the brain.\n
     <|assistant|>\n
 \end{verbatim}
-The \texttt{<|user|>} tag tells the model where the user message starts. The \texttt{<|assistant|>} tag tells the model where the user message ends and that the model should start writing the response. In the space of HuggingFace, this kind of format is usually called \emph{chat template}. After applying this template, the text is tokenized and converted to a numerical format by a so-called \emph{tokenizer} to make it readable for the model. For \emph{AMD-OLMo-1B-SFT}, the tokenized and converted sequence looks like the following:
+The \texttt{<|user|>} tag tells the model where the user message starts. The \texttt{<|assistant|>} tag tells the model where the user message ends and that the model should start writing the response. In the space of HuggingFace, this kind of format is usually called \emph{chat template}. After applying this template, the text is tokenized and converted to a numerical format by a so-called \emph{tokenizer} to make it readable for the model. For \texttt{AMD-OLMo-1B-SFT}, the tokenized and converted sequence looks like the following:
 \begin{verbatim}
      29, 93, 4537, 49651, 187, 6723, 3998, 1341, 7032, 273,
      4886, 32, 13658, 13, 309, 1353, 14339, 281, 1048, 14,
@@ -129,7 +187,7 @@ Although no additional \acrfull{sft} is performed in this work, all data samples
 \acrfull{sft} is a process in which a pretrained language model is further trained on a collection of task-specific examples, each consisting of an input (such as a user prompt) and an expected output (such as an assistant response). The goal is to optimize the model’s parameters so that its outputs closely match the ground truth responses, typically minimizing loss of cross-entropy. In the context of conversational models, \acrshort{sft} datasets are structured as lists of message objects, each message specifying a \texttt{role} (e.g., user or assistant) and a \texttt{content} field, as described in Section~\ref{subsec:message_format}. Formatting the data in this standardized way enables the fine-tuning process to teach the model not only to generate accurate responses, but also to adhere to the required conversational structure. As already mentioned, no further \acrshort{sft} is performed in this work, but all samples are formatted in this way to ensure full compatibility with existing pipelines and to support consistent evaluation.
 
 \subsubsection{Open-Instruct}
-In the context of this work, \emph{Open-Instruct} is primarily utilized to preprocess and structure the data according to established \acrshort{sft} conventions. Specifically, the framework offers utilities for converting raw user–assistant-message pairs such as those from the \emph{LIMA} dataset into the standardized chat template format (e.g., \texttt{<|user|>} and \texttt{<|assistant|>} tags) used by models like \emph{AMD-OLMo-1B-SFT}. This ensures consistency between the data preparation procedure and the input expectations of the underlying model architecture.
+In the context of this work, \emph{Open-Instruct} is mainly utilized to preprocess and structure the data according to established \acrshort{sft} conventions. Specifically, the framework offers utilities for converting raw user–assistant-message pairs such as those from the \emph{LIMA} dataset into the standardized chat template format (e.g., \texttt{<|user|>} and \texttt{<|assistant|>} tags) used by models like \texttt{AMD-OLMo-1B-SFT}. This ensures consistency between the data preparation procedure and the input expectations of the underlying model architecture.
 \\\\
 To preprocess the data for \acrfull{sft}, \emph{SFTDatasetProcessor} from \emph{Open-Instruct} is used. It allows a whole dataset to be tokenized and prepared by forming the corresponding input and output sequences and naturally integrating into the \emph{HuggingFace} ecosystem for \acrshort{sft}.
 
