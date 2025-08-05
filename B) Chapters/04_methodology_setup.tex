@@ -14,10 +14,10 @@ In this article, the focus is on the \texttt{AMD-OLMo-1B-SFT} model from AMD, wh
         \hline  
         \BreakHeader{Parameter \\ size} & \BreakHeader{Number of \\ layers} & \BreakHeader{Number of \\ heads} & \BreakHeader{Hidden \\ size} & \BreakHeader{Context \\ length} & \BreakHeader{Vocabulary \\ Size} \\ 
         \hline  
-        1.2B & 16 & 16 & 2048 & 20248 & 50280 \\
+        1.2B & 16 & 16 & 2{,}048 & 2{,}048 & 50{,}280 \\
         \hline
     \end{tabular}
-    \caption{Model architecture size of AMD-OLMo-1B-SFT}
+    \caption{Model architecture size of AMD-OLMo-1B-SFT \cite{AMD-OLMo}}
     \label{tab:model_architecture_olmo_1b_amd}
 \end{table} 
 The model is loaded using \emph{HuggingFace}\textquotesingle s \emph{transformers} function \texttt{from\_pretrained(\textless model\textgreater)} from the class \texttt{AutoModelForCausal}, where \texttt{model} is the model name (\texttt{AMD-OLMo-1B-SFT}). It allows published models with corresponding pre-trained weights to be downloaded and further adapted using \emph{PyTorch}. The complete model architecture when loaded with the \emph{transformers} and printed on the console looks like:
@@ -49,40 +49,47 @@ OlmoForCausalLM(
   (lm_head): Linear(in_features=2048, out_features=50304, bias=False)
 )
 \end{verbatim}
-As shown above, the model consists of the following trainable components with corresponding dimensionality.
+Table~\ref{tab:model_architecture_olmo_1b_amd} shows a vocabulary size of $50{,}280$, while the actual model output shows a size of $50{,}304$. The authors increased the size to be a multiple of $128$ to maximize training throughput \cite{Groeneveld2023OLMo}. As shown above, the model consists of the following trainable components.
 \begin{itemize}
-    \item \textbf{Input Embedding:} $\mathbf{E} \in \mathbb{R}^{|V| \times d_x}$
-    \item \textbf{16 Decoder Layers ($l = 0, \ldots, 15$):}
-    \begin{itemize}
-        \item \textbf{Attention:}
-        \begin{itemize}
-            \item \textbf{Query-Projection:} \hspace{0.6em} $\mathbf{W}_\text{Q}^{(l)} \in \mathbb{R}^{d_x \times d_x}$
-            \item \textbf{Key-Projection:} \hspace{1.8em} $\mathbf{W}_\text{K}^{(l)} \in \mathbb{R}^{d_x \times d_x}$
-            \item \textbf{Value-Projection:} \hspace{1.3em} $\mathbf{W}_\text{V}^{(l)} \in \mathbb{R}^{d_x \times d_x}$
-            \item \textbf{Output-Projection:} \hspace{0.5em} $\mathbf{W}_\text{O}^{(l)} \in \mathbb{R}^{d_x \times d_x}$
-        \end{itemize}
-        \item \textbf{MLP:}
-        \begin{itemize}
-            \item \textbf{Gate-Projection:} \hspace{1.7em} $\mathbf{W}_\text{gate}^{(l)} \in \mathbb{R}^{d_x \times d_{ff}}$
-            \item \textbf{Up-Projection:} \hspace{2.3em} $\mathbf{W}_\text{up}^{(l)} \in \mathbb{R}^{d_x \times d_{ff}}$
-            \item \textbf{Down-Projection:} \hspace{1.2em} $\mathbf{W}_\text{down}^{(l)} \in \mathbb{R}^{d_{ff} \times d_x}$
-        \end{itemize}
-    \end{itemize}
-    \item \textbf{Output Embedding:} $\mathbf{W}^{(o)} \in \mathbb{R}^{d_x \times |V|}$
+    \item Input Embedding: $\mathbf{E} \in \mathbb{R}^{|V| \times d_x}$
+    \item 16 Decoder Layers ($l = 0, \ldots, 15$):
+    
+    \hspace*{2em}
+    \begin{tabular}{@{}ll}
+        - Attention: & \\[0.5em]
+        \quad - Query-Projection:     & $\mathbf{W}_\text{Q}^{(l)} \in \mathbb{R}^{d_x \times d_x}$ \\[0.5em]
+        \quad - Key-Projection:       & $\mathbf{W}_\text{K}^{(l)} \in \mathbb{R}^{d_x \times d_x}$ \\[0.5em]
+        \quad - Value-Projection:     & $\mathbf{W}_\text{V}^{(l)} \in \mathbb{R}^{d_x \times d_x}$ \\[0.5em]
+        \quad - Output-Projection:    & $\mathbf{W}_\text{O}^{(l)} \in \mathbb{R}^{d_x \times d_x}$ \\[0.5em]
+        - \acrshort{mlp}: & \\[0.5em]
+        \quad - Gate-Projection:      & $\mathbf{W}_\text{gate}^{(l)} \in \mathbb{R}^{d_x \times d_{ff}}$ \\[0.5em]
+        \quad - Up-Projection:        & $\mathbf{W}_\text{up}^{(l)} \in \mathbb{R}^{d_x \times d_{ff}}$ \\[0.5em]
+        \quad - Down-Projection:      & $\mathbf{W}_\text{down}^{(l)} \in \mathbb{R}^{d_{ff} \times d_x}$ \\[0.5em]
+    \end{tabular}
+    
+    \item \acrshort{lm} Head: $\mathbf{W}^{(o)} \in \mathbb{R}^{d_x \times |V|}$
 \end{itemize}
-
-Explanation for each:
-
+The dimensionalities $|V|$, $d_x$, and $d_{ff}$ used in the above weight notation correspond to the architecture parameters, as specified below:
 \begin{itemize}
-\item $|V|$: Vocabulary size (for \texttt{AMD-OLMo-1B-SFT}, $|V| = 50{,}304$).
-\item $d_x$: Hidden size (for \texttt{AMD-OLMo-1B-SFT}, $d_x = 2{,}048$).
-\item $d_{ff}$: Feedforward/MLP hidden width (for \texttt{AMD-OLMo-1B-SFT}, $d_{ff} = 8{,}192$).
+    \item $|V|$: Vocabulary size (for \texttt{AMD-OLMo-1B-SFT}, $|V| = 50{,}304$).
+    \item $d_x$: Hidden size (for \texttt{AMD-OLMo-1B-SFT}, $d_x = 2{,}048$).
+    \item $d_{ff}$: Feedforward size (for \texttt{AMD-OLMo-1B-SFT}, $d_{ff} = 8{,}192$).
 \end{itemize}
-
-
-\fxnote{maybe go more into the detail of the architecture regarding weights, activation function, etc.}
-\fxnote{reference model size equation from previous chapter and establish detailed model size}
-\fxnote{list all layers with their corresponding sizes}
+The total number of trainable parameters $M$ for \texttt{AMD-OLMo-1B-SFT} with $L = 16$ decoder layers is:
+\begin{align*}
+    M &=\quad \underbrace{|V| \cdot d_x}_{\text{Input Embedding}} 
+    + \underbrace{L \big( 4 d_x^2 + 3 d_x d_{ff} \big)}_{\text{Decoder Layers}}
+    + \underbrace{d_x \cdot |V|}_{\text{LM Head}} \\
+    &=\quad 2 \bigl( |V| \cdot d_x \bigr)
+    + L \big( 4 d_x^2 + 3 d_x d_{ff} \big) \\
+    &=\quad 2 \cdot 50{,}304 \cdot 2{,}048 + 16 \bigl(4 \cdot 2{,}048^2 + 3 \cdot 2{,}048 \cdot 8{,}192 \bigr) \\
+    &=\quad 1279787008
+\end{align*}
+However, this number does not match the model output $M_H = 1176764416$ when calling the function \texttt{model.num\_parameters()}. The difference $\Delta_M =  M - M_H = 103022592$ happens to be exactly $\Delta_M = |V| \cdot d_x = 50{,}304 \cdot 2{,}048$. This indicates some form of weight-tying, and when looking into the model configuration this proves to be true.
+\\\\
+how to reference tied embedding urls:
+\url{https://github.com/allenai/OLMo/blob/04820704616af5d25cdba4df23aa7b4d9ce86cad/configs/official-0724/OLMo-1B.yaml#L14} \\
+\url{https://huggingface.co/amd/AMD-OLMo-1B-SFT/blob/main/config.json#L21}
 
 \subsection{LIMA Dataset}\label{subsec:lima_dataset}
 The \emph{LIMA} dataset is a subset of the \emph{TÜLU} dataset, containing 1,000 carefully curated prompts and responses across various domains, including STEM fields, alongside manually authored samples \cite{zhou2023limaalignment}. Similar to other instruction-tuning datasets, it comprises pairs of prompts and corresponding generations. A prompt typically represents a user's instruction or query, specifying the task or information the model should provide. The model's output, referred to as a generation or response, directly addresses the user's prompt. An illustrative example from the \emph{LIMA} dataset is provided below. This example shows how much quality and depth the \emph{LIMA} dataset has. In this case, the example is well-referenced and closely resembles an expert-level response.
