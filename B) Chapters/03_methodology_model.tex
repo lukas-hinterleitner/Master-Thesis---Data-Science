@@ -1,9 +1,9 @@
-\chapter{Gradient Similarity as a Method for Explanation}
+\chapter{Gradient Similarity as a Method for Explanation}\label{cha:gradient_similarity}
 
 \section{Instance-based Explainability Methods}
 \fxnote{Establish setting of instance-based and furthermore gradient-based explanations, etc.}
 
-\section{Fine-Tuning Setting}
+\section{Fine-Tuning Setting}\label{sec:fine_tuning_setting}
 Given a fine-tuning training dataset $D = \{s_i\}_{i=0}^N$, where $s_i$ is the $i$-th sample that contains a sequence of tokens. In the scope of this article, the term \emph{original} refers to samples in this dataset. Each of these samples contains instructions and generations, where $s_i^{-P_i},...,s_i^{-1}$ denote the tokens of the $i$-th instruction prompt of length $P_i$, and $s_i^0,...,s_i^{G_i}$ denote the tokens of the $i$-th generation for the $i$-th prompt with a length of $G_i$.
 \\\\
 Then the training of an \acrshort{llm} can be formulated as follows: 
@@ -13,7 +13,7 @@ Then the training of an \acrshort{llm} can be formulated as follows:
 \end{equation}
 where $\theta$ represents the parameters of the model and $\mathcal{L}(\cdot, \theta)$ is the loss function. The term $\frac{1}{\sum_{i=0}^{N} G_i}$ in equation \ref{eq:llm_loss_function} is the total number of generation tokens in the entire training set. Usually, for the \acrshort{llm} objective, the loss is $\mathcal{L}(s_i^j, \theta) = -\log p_\theta(s_i^j \mid s_i^{-P_i}, \ldots, s_i^{j-1})$ the negative log-likelihood of the correct token given all previous tokens. \fxnote{Maybe explain where the probabilities are coming from --> softmax} Modern \acrshort{llm} architectures use adapted versions of it or may use other loss functions. However, in this setting, the choice of loss function does not matter as long as it suits language modeling. Let $\mathcal{L}(s_i, \theta) = \frac{1}{G_i} \sum_{j=0}^{G_i} \mathcal{L}(s_i^j, \theta)$, be the loss per sample which will be relevant in the following sections.
 \\\\
-Usually, machine learning models are trained using batches of training data with size $b > 1$. In the setting of this article, the batch size is set to $b = 1$ to measure phenomena for single instances. Hence, in the training process, for iteration $a$, the parameters are updated from $\theta_{a-1}$ to $\theta_{a}$ depending on the training sample $s_a$. 
+Usually, machine learning models are trained using batches of training data. In the setting of this article, the batch size is set to exactly one to measure phenomena for single instances. Hence, in the training process, for iteration $a$, the parameters are updated from $\theta_{a-1}$ to $\theta_{a}$ depending only on the training sample $s_a$. 
 \\\\
 Modern \acrshort{llm} training still relies on the original idea of gradient descent to update the model weights despite being more advanced in terms of convergence, regularization, memory-efficiency, etc., for example, LAMB \cite{you2020largebatchoptimizationdeep}. However, in the proposed setting, we are only looking at the gradients of the loss function with respect to each individual training sample without updating the model weights correspondingly; therefore, establishing the idea of gradient descent is sufficient here. The formulation of gradient descent for this setting is shown in equation \ref{eq:gradient_descent}:
 \begin{equation}
@@ -106,7 +106,7 @@ TODO: illustrate the general idea; use general notation of similarity between gr
 
 \fxnote{the upcoming section only covers equation with $\spi$. make clear, that the calculation also are valid for $\smi$}
 
-\subsection{Gradient Flattening}
+\subsection{Gradient Flattening}\label{subsec:gradient_flattening}
 Equation~\ref{eq:gradient_descent} illustrates how gradient descent updates the model parameters for training iteration $a$ and the current model parameters $\theta_a$. However, the setting in this article focuses on already fine-tuned models, and hence only the final model parameters $\theta_T$ are used for gradient computations. For example, the loss function gradient for a sample $s_i$ and the trained model parameters $\theta_T$ w.r.t. the model parameters $\theta$ is denoted as $\nabla_{\theta} \mathcal{L}(s_i, \theta_T)$.
 \\\\
 As illustrated in Subsection~\ref{ssec:different_layers_and_components}, the model parameter space $\theta$ consists of many different variations of matrices with different sizes and dimensions. For simplicity, denote the parameter space $\theta$ as a generic set of parameter matrices
@@ -213,7 +213,7 @@ In short, cosine similarity isolates geometrically relevant information (directi
 ignoring the interference factor (magnitude), making it an appropriate choice for
 gradient-based influence analysis~\cite{Hammoudeh_2024}.
 
-\section{Gradient Similarity}
+\section{High Gradient Similarity with Similar Samples}
 As already mentioned, the original assumption is that when a model is already trained on sample $\si$, then in the paraphrased setting
 \begin{equation}
     \simcos \bigl( \vXspi, \vXsi \bigr) > \simcos \bigl( \vXspi, \vXsj \bigr), \qquad \forall\,j\in\{0,\dots,N\}\setminus\{i\}.
@@ -241,7 +241,7 @@ For both settings, this comparison is made for all samples $\spi$ and $\smi$ to 
 \end{equation}
 As shown in Equation~\ref{eq:accuracy_full}, when computing $\operatorname{accuracy}_\theta(D_p, D) \in [0,1]$, the gradient for each sample $\si$ and $\spi$ has to be calculated. Due to the high-dimensionality of these gradients in the \acrshort{llm} setting, they cannot be cached in the application's memory nor can they be stored on disk, and hence have to be recomputed for each iteration. More about this is mentioned in Subsection \ref{subsec:high_dimensionality}.
 
-\subsection{BM25-selected Samples}
+\subsection{BM25-selected Samples}\label{subsec:bm25_selection}
 As mentioned above, comparing each paraphrased sample gradient $\spi$ with all original sample gradients $\si$, is computationally very expensive or even practically infeasible for larger models. However, in this setting, it is not necessary to compare each paraphrased sample gradient $\spi$ with the original samples $\si$ from $D$. One could just use a well established ranking function for document retrieval in a text-based setting, in this case BM25~\cite{bm25}. 
 \fxnote{Explain what BM25 is and why it is used.}
 \fxnote{Explain what $\operatorname{BM25}_D(\spi, \sj)$ regarding corpus $D$, etc. means.}
@@ -266,7 +266,7 @@ $\mathcal{C}_i(b) \gets \operatorname{argsort\_topk}(\text{score}, k)$\; \Commen
 
 \Return $\mathcal{C}_i(b)$
 \end{algorithm}
-Now that the notion of an index set $\mathcal{C}_i(b)$ with the most lexical overlapping samples to sample $\spi$ is established, the accuracy in Equation~\ref{eq:accuracy_full} can be improved with respect to execution time, as shown in Equation~\ref{eq:accuracy_bm25}. \fxnote{by that we don't need to compute every gradient similarity between each other NxN but rather Nxk}
+Now that the notion of an index set $\mathcal{C}_i(b)$ with the most lexical overlapping samples to sample $\spi$ is established, the accuracy in Equation~\ref{eq:accuracy_full} can be improved with respect to execution time, as shown in Equation~\ref{eq:accuracy_bm25}. Operationally, restricting each comparison to the BM25 candidate set $\mathcal{C}_i(b)$ removes the all-against-all setting: instead of evaluating $N$ cosine similarities per $\spi$, only $b$ are evaluated. Consequently, the total cost drops from $\mathcal{O}(N^2)$ to $\mathcal{O}(Nb)$ (with $b \ll N$). Additionally, the overwrite rule guarantees that the true pair $(\spi,\si)$ is always present, and only the gradients for these $b$ candidates must be computed or loaded, which further reduces runtime and peak memory.
 \begin{equation}
 \operatorname{accuracy}^{(b)}_{\theta}(D_{p},D)
 \;:=\;
@@ -442,7 +442,7 @@ $\rho(\mathcal{L}_t)$ improves as quickly as possible:
 \rho\bigl(\mathcal{L}_t \cup \{(l,k)\}\bigr).
 \]
 
-\subsection{Algorithm}\label{ssec:gls_algo}
+\subsection{Algorithm}\label{subsec:gls_algo}
 The forward greedy strategy below maintains the accumulators
 $D^{\mathcal{L}}_{i,j}$, $D^{\mathcal{L}}_{i,i}$, $D^{\mathcal{L}}_{j,j}$ (vectorized over all pairs $(i,j)$) and
 updates them \emph{once per newly selected index $(l,k)$}. This avoids re‑summing all previously
@@ -482,7 +482,7 @@ $\mathcal{L}\gets\varnothing$,\quad $\mathcal{R}\gets\mathcal{W}$ (remaining ind
     $\widetilde{D}_{jj} \gets D_{jj} + \delta^{(l,k)}_{j,j}$\;
     \tcp{Vectorized reconstruction of Eq.~\eqref{eq:reconstructed_cosine}}
     $\hat{\Gamma} \gets \widetilde{D}_{ij} \oslash \bigl(\sqrt{\widetilde{D}_{ii}}\odot \sqrt{\widetilde{D}_{jj}} + \varepsilon\bigr)$\;
-    $n \gets \|\hat{\Gamma}\|_2 + \varepsilon$\;
+    $n \gets \|\hat{\Gamma}\|_2 + \varepsilon$\; \fxnote{change notion of epsilon here, and explain in the text}
     \tcp{Score of Eq.~\eqref{eq:rho_objective}}
     $\rho \gets \frac{\langle \hat{\Gamma}, \Gamma^\theta \rangle}{n \cdot n_\theta}$\;
     \If{$\rho > \rho^\star$}{
@@ -500,11 +500,36 @@ $\mathcal{L}\gets\varnothing$,\quad $\mathcal{R}\gets\mathcal{W}$ (remaining ind
 \Return ordered list.
 \end{algorithm}
 
-\paragraph{Complexity.}
+\subsubsection{Complexity}
 Let $L_\text{tot}=|\mathcal{W}|$ be the number of (layer) index pairs and $P$ the number of paraphrased–original pairs with $b$ BM25 selected original samples. Each greedy iteration scans all remaining indices and performs $\mathcal{O}(P)$ vector operations, yielding a worst‑case complexity of $\mathcal{O}(L_\text{tot}^2 P)$. In practice, such greedy algorithms usually stop when the objective, in this case $\rho$ plateaus. However, for the sake of completeness, early stopping is not applied to gather more insights on how the algorithm performs with increasing dimensions.
 
-\paragraph{Numerical details.}
+\subsubsection{Numerical details.}
 The implementation adds a very small $\varepsilon$ in denominators to avoid divisions by zero and uses vectorization to (i) avoid deep dictionary lookups inside the greedy loop and (ii) keep the per‑iteration cost proportional to $P$.
 
-\paragraph{Variants.}
+\subsubsection{Variants.}
 Besides \emph{forward} selection, one could also do \emph{backward} elimination (start with all indices and iteratively remove the least helpful one) or \emph{beam} search over small subsets. Forward selection is cheaper here because we can re‑use the running accumulators $(D_{ij},D_{ii},D_{jj})$ and never need to re‑materialize full model‑sized vectors. Additionally, the focus is on small vector representations and therefore, the early results of the forward greedy-layer-selection are more interesting for this use case.
+
+\subsection{Random Projection as a Baseline}\label{subsec:random_projection_as_a_baseline}
+To validate that the Greedy Layer Selection algorithm identifies a genuinely influential subset of layer components, its performance is compared with a random projection baseline. This baseline helps to answer the question: Does the greedy method significantly outperform a random selection of an equivalent number of parameters?
+\\\\
+The \acrfull{jl} lemma suggests that even a random projection can preserve the geometry of the data, making it a non-trivial benchmark \cite{johnson_lindenstrauss}. In this context, the baseline is constructed by projecting the entire gradient vector into a lower-dimensional space. The full, high-dimensional gradient vector for a sample $s_i$ is denoted by $\vXsi[\theta] \in \mathbb{R}^M$. A random projection matrix $\mathbf{R} \in \mathbb{R}^{d \times M}$, where $d \ll M$, is used to map this gradient to a lower-dimensional space. The projected gradient vector, $\mathbf{p}(s_i) \in \mathbb{R}^d$, is defined as:
+\begin{equation}
+    \mathbf{p}(s_i) := \frac{1}{\sqrt{d}} \mathbf{R} \, \vXsi[\theta]
+\end{equation}
+where $d$ is the target dimension of the projection \cite{rakhshan2022rademacherrandomprojectionstensor}.
+\\\\
+However, due to computational constraints that prevent materializing the full gradient vector $\vXsi[\theta]$ at once, a layer-wise projection strategy is implemented. For each layer component $\Wlk$, a separate random matrix $\mathbf{R}^{(l,k)} \in \mathbb{R}^{d_{l,k} \times |\Wlk|}$ is used to project the corresponding layer gradient $\vXsi[\Wlk]$, where $d_{l,k}$ is the projection dimension for that layer, proportional to its number of parameters $|\Wlk|$. The final low-dimensional representation is obtained by concatenating these individual projections:
+\begin{equation}
+    \mathbf{p}(s_i) := \operatorname{col}\left( \frac{1}{\sqrt{d_{0,0}}} \mathbf{R}^{(0,0)} \vXsi[\W^{(0,0)}], \dots, \frac{1}{\sqrt{d_{L,K_L}}} \mathbf{R}^{(L,K_L)} \vXsi[\W^{(L,K_L)}] \right).
+\end{equation}
+The cosine similarity is then computed between these resulting projected vectors $\mathbf{p}(s_i)$ and $\mathbf{p}(s_j)$ for each sample pair.
+\\\\
+The comparison is performed as follows:
+\begin{enumerate}
+    \item The {full-model gradient similarity} is computed for each sample pair $(\spi, \sj)$ to establish a ground truth. This involves calculating the gradient for each sample, flattening the gradient tensors for all layers into a single high-dimensional vector $\vXsi[\theta]$, and then computing the cosine similarity between these flattened vectors.
+    \item The Greedy Layer Selection (Algorithm \ref{alg:greedy_layer_selection}) is executed to iteratively build a subset of layer components whose combined gradients best approximate the ground-truth similarities.
+    \item A layer-wise random projection of the gradients is performed as a baseline. For each sample, the gradient vector of every individual layer component $\vXsi[\Wlk]$ is projected separately into a lower-dimensional space. These individual projected vectors are then concatenated to form a single, final low-dimensional representation of the full model gradient.
+    \item Finally, the cosine similarity is calculated between these concatenated, low-dimensional projected gradient vectors for each sample pair. The results of this baseline are then compared against the ground truth as well. 
+\end{enumerate}
+
+\fxnote{maybe mention processess of the jupyter notebook after intermediate results are computed}

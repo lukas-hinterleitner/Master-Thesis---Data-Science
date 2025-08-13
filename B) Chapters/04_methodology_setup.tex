@@ -1,8 +1,20 @@
-\chapter{TBR: Methodology - Experimental Setup}
-\fxnote{TODO: introduction text}
+\chapter{Model, Data, and Infrastructure}
+This chapter presents the experimental setup for the computations laid out in Chapter~\ref{cha:gradient_similarity}. First, the model and data sources are specified, and the acquisition of third-party artifacts is formalized to ensure reproducibility. The construction of the working datasets is then described, including message formatting and paraphrasing procedures that enable controlled comparisons between the original and transformed samples.
+\\\\
+To apply the analysis on modern \acrshort{llm}s, three mechanisms are employed: (i) search-space reduction via lexical pre-selection, (ii) storage of intermediate dot products in place of full gradients, and (iii) layer-wise random projections. The hardware and scheduling environment are summarized to make resource assumptions explicit and to facilitate replication. The overall goal is to isolate per-instance effects while keeping the pipeline deterministic and verifiable.
 
 \section{HuggingFace as a General Model and Data Provider}
-asdf
+\label{sec:hf_provider}
+In this work, the \emph{HuggingFace} ecosystem serves as the unified provider for models and datasets. Models are retrieved via \emph{transformers} using \texttt{from\_pretrained(\textless model\textgreater)} to obtain versioned weights, configuration files, and tokenizer assets; tokenizers are loaded analogously to ensure consistent preprocessing across all runs~\cite{wolf-etal-2020-transformers}. Datasets are accessed through the \emph{datasets} library, which offers streaming, on-disk caching, dataset cards with licensing information, and standardized schemas for robust iteration and filtering~\cite{lhoest-etal-2021-datasets}.
+\\\\
+Relying on a single provider simplifies the end-to-end workflow and reduces nondeterminism. In particular:
+\begin{itemize}
+    \item \textbf{Versioning and Reproducibility}: Pinning a specific revision guarantees that identical artifacts (weights, configs, tokenizer vocabulary, and chat templates) are resolved in subsequent runs.
+    \item \textbf{Cached Artifacts}: Local caching enables offline execution and stable re-use of immutable assets without manual bookkeeping.
+    \item \textbf{Introspectable Metadata}: Model cards, configuration files, and tokenizer or chat-template metadata (e.g., \texttt{tokenizer.chat\_template}) can be read programmatically to construct inputs aligned with each model’s pretraining or \acrshort{sft} format.
+    \item \textbf{Schema-First Data Access}: Standardized dataset schemas and filtering utilities minimize glue code and keep preprocessing auditable.
+\end{itemize}
+Taken together, these properties ensure that preprocessing, evaluation, and analysis operate over a consistent, fully specified set of artifacts, thereby supporting exact reproducibility of all experiments.
 
 \subsection{OLMo}
 The OLMo model series, developed by the \emph{Allen Institute for AI}, provides open-source \acrshort{llm}s along with their training data and comprehensive training pipelines~\cite{Groeneveld2023OLMo}. These features make OLMo models particularly suitable for research focused on explainability. Specifically, OLMo models are pre-trained on the \emph{Dolma} dataset, which comprises approximately three trillion tokens collected from diverse sources~\cite{dolma}. To adapt these models to specific tasks, the \emph{Open Instruct} framework combined with the \emph{TÜLU} dataset is employed for fine-tuning~\cite{ivison2023camels}.
@@ -17,7 +29,7 @@ In this article, the focus is on the \texttt{AMD-OLMo-1B-SFT} model from AMD, wh
         1.2B & 16 & 16 & 2{,}048 & 2{,}048 & 50{,}280 \\
         \hline
     \end{tabular}
-    \caption{Model architecture size of AMD-OLMo-1B-SFT \cite{AMD-OLMo}}
+    \caption{Model architecture size of \texttt{AMD-OLMo-1B-SFT} \cite{AMD-OLMo}}
     \label{tab:model_architecture_olmo_1b_amd}
 \end{table} 
 The model is loaded using \emph{HuggingFace}\textquotesingle s \emph{transformers} function \texttt{from\_pretrained(\textless model\textgreater)} from the class \texttt{AutoModelForCausal}, where \texttt{model} is the model name (\texttt{AMD-OLMo-1B-SFT}). It allows published models with corresponding pre-trained weights to be downloaded and further adapted using \emph{PyTorch}. The complete model architecture when loaded with the \emph{transformers} and printed on the console looks like:
@@ -53,20 +65,21 @@ Table~\ref{tab:model_architecture_olmo_1b_amd} shows a vocabulary size of $50{,}
 \begin{itemize}
     \item Input Embedding: $\mathbf{E} \in \mathbb{R}^{|V| \times d_x}$
     \item 16 Decoder Layers ($l = 0, \ldots, 15$):
-    
-    \hspace*{2em}
-    \begin{tabular}{@{}ll}
-        - Attention: & \\[0.5em]
-        \quad - Query-Projection:     & $\mathbf{W}_\text{Q}^{(l)} \in \mathbb{R}^{d_x \times d_x}$ \\[0.5em]
-        \quad - Key-Projection:       & $\mathbf{W}_\text{K}^{(l)} \in \mathbb{R}^{d_x \times d_x}$ \\[0.5em]
-        \quad - Value-Projection:     & $\mathbf{W}_\text{V}^{(l)} \in \mathbb{R}^{d_x \times d_x}$ \\[0.5em]
-        \quad - Output-Projection:    & $\mathbf{W}_\text{O}^{(l)} \in \mathbb{R}^{d_x \times d_x}$ \\[0.5em]
-        - \acrshort{mlp}: & \\[0.5em]
-        \quad - Gate-Projection:      & $\mathbf{W}_\text{gate}^{(l)} \in \mathbb{R}^{d_x \times d_{ff}}$ \\[0.5em]
-        \quad - Up-Projection:        & $\mathbf{W}_\text{up}^{(l)} \in \mathbb{R}^{d_x \times d_{ff}}$ \\[0.5em]
-        \quad - Down-Projection:      & $\mathbf{W}_\text{down}^{(l)} \in \mathbb{R}^{d_{ff} \times d_x}$ \\[0.5em]
-    \end{tabular}
-    
+    \begin{itemize}
+        \item Attention:
+        \begin{itemize}
+            \item Query-Projection:   $\mathbf{W}_\text{Q}^{(l)} \in \mathbb{R}^{d_x \times d_x}$
+            \item Key-Projection:     $\mathbf{W}_\text{K}^{(l)} \in \mathbb{R}^{d_x \times d_x}$
+            \item Value-Projection:   $\mathbf{W}_\text{V}^{(l)} \in \mathbb{R}^{d_x \times d_x}$
+            \item Output-Projection:  $\mathbf{W}_\text{O}^{(l)} \in \mathbb{R}^{d_x \times d_x}$
+        \end{itemize}
+        \item \acrshort{mlp}:
+        \begin{itemize}
+            \item Gate-Projection:    $\mathbf{W}_\text{gate}^{(l)} \in \mathbb{R}^{d_x \times d_{ff}}$
+            \item Up-Projection:      $\mathbf{W}_\text{up}^{(l)} \in \mathbb{R}^{d_x \times d_{ff}}$
+            \item Down-Projection:    $\mathbf{W}_\text{down}^{(l)} \in \mathbb{R}^{d_{ff} \times d_x}$
+        \end{itemize}
+    \end{itemize}
     \item \acrshort{lm} Head: $\mathbf{W}^{(o)} \in \mathbb{R}^{d_x \times |V|}$
 \end{itemize}
 The dimensionalities $|V|$, $d_x$, and $d_{ff}$ used in the above weight notation correspond to the architecture parameters, as specified below:
@@ -75,20 +88,33 @@ The dimensionalities $|V|$, $d_x$, and $d_{ff}$ used in the above weight notatio
     \item $d_x$: Hidden size (for \texttt{AMD-OLMo-1B-SFT}, $d_x = 2{,}048$).
     \item $d_{ff}$: Feedforward size (for \texttt{AMD-OLMo-1B-SFT}, $d_{ff} = 8{,}192$).
 \end{itemize}
-The total number of trainable parameters $M$ for \texttt{AMD-OLMo-1B-SFT} with $L = 16$ decoder layers is:
+The total number of parameters $M_H$ for \texttt{AMD-OLMo-1B-SFT} with $L = 16$ decoder layers is:
 \begin{align*}
-    M &=\quad \underbrace{|V| \cdot d_x}_{\text{Input Embedding}} 
+    M_H &=\quad \underbrace{|V| \cdot d_x}_{\text{Input Embedding}} 
     + \underbrace{L \big( 4 d_x^2 + 3 d_x d_{ff} \big)}_{\text{Decoder Layers}}
     + \underbrace{d_x \cdot |V|}_{\text{LM Head}} \\
     &=\quad 2 \bigl( |V| \cdot d_x \bigr)
     + L \big( 4 d_x^2 + 3 d_x d_{ff} \big) \\
     &=\quad 2 \cdot 50{,}304 \cdot 2{,}048 + 16 \bigl(4 \cdot 2{,}048^2 + 3 \cdot 2{,}048 \cdot 8{,}192 \bigr) \\
-    &=\quad 1279787008
+    &=\quad 1{,}279{,}787{,}008
 \end{align*}
-However, this number does not match the model output $M_H = 1176764416$ when calling the function \texttt{model.num\_parameters()}. The difference $\Delta_M =  M - M_H = 103022592$ happens to be exactly $\Delta_M = |V| \cdot d_x = 50{,}304 \cdot 2{,}048$. This indicates some form of weight-tying, and when looking into the model configuration this proves to be true.
+However, this number does not match the model output $M = 1{,}176{,}764{,}416$ when calling the function \texttt{model.num\_parameters()}. The difference $\Delta_M = M_H - M = 103{,}022{,}592$ happens to be exactly $\Delta_M = |V| \cdot d_x = 50{,}304 \cdot 2{,}048$ which is the number of parameters for the embedding. This indicates some form of weight-tying, and when looking into the model configuration and the model source code \cite{Groeneveld2023OLMo}, this proves to be true. Hence, the final number of trainable parameters is $M$ since the \acrshort{lm} head matrix $\mathbf{W}^{(o)} \in \mathbb{R}^{d_x \times |V|}$ is just the transpose of the input embedding matrix $\mathbf{E} \in \mathbb{R}^{|V| \times d_x}$. A visual representation of the trainable parameters per layer is shown in Figure~\ref{fig:parameters_per_layer_amd_olmo}. In summary, each layer component has a fixed number of trainable parameters as illustrated in Table~\ref{tab:parameter_components_olmo}.
+\begin{table}[htb]
+    \centering
+    \begin{tabular}{|l|c|c|}
+        \hline
+        \textbf{Component} & \textbf{Shape} & \textbf{Number of Parameters} \\
+        \hline
+        Input Embedding & $\mathbb{R}^{|V| \times d_x}$ & $|V| \cdot d_x = 50{,}304 \cdot 2{,}048 = 103{,}022{,}592$ \\
+        Attention Projections & $\mathbb{R}^{d_x \times d_x}$ & $2{,}048^2 = 4{,}194{,}304$ \\
+        \acrshort{mlp} Projections & $\mathbb{R}^{d_x \times d_{ff}}$; $\mathbb{R}^{d_{ff} \times d_x}$ & $2{,}048 \cdot 8{,}192 = 16{,}777{,}216$ \\
+        \hline
+    \end{tabular}
+    \caption{Trainable parameters in AMD-OLMo-1B-SFT per layer components.}
+    \label{tab:parameter_components_olmo}
+\end{table}
 \\\\
-how to reference tied embedding urls:
-\url{https://github.com/allenai/OLMo/blob/04820704616af5d25cdba4df23aa7b4d9ce86cad/configs/official-0724/OLMo-1B.yaml#L14} \\
+\fxnote{how to reference tied embedding urls?}
 \url{https://huggingface.co/amd/AMD-OLMo-1B-SFT/blob/main/config.json#L21}
 
 \subsection{LIMA Dataset}\label{subsec:lima_dataset}
@@ -154,6 +180,7 @@ This uniform structure facilitates both supervised fine-tuning and later evaluat
 
 \subsection{Paraphrasing Samples}\label{sec:paraphrasing_samples}
 As already mentioned in Section~\ref{sec:paraphrasing_a_dataset}, the covered approach operates with two different settings, namely \emph{paraphrased} and \emph{model-generated} paraphrasing levels. For the \emph{paraphrased} case, both the query (user message) and the generation (assistant message) are altered using \emph{OpenAI GPT-4o-mini} with a seed of $42$ and a temperature of $1$. The rest of the parameters are set to default values. The corresponding system prompt is illustrated below:
+\fxnote{$LLM_{para}$}
 \begin{verbatim}
     You are a paraphrasing expert who is specialized in rewriting text 
     (questions, statements, etc.) without altering the content. 
@@ -190,8 +217,6 @@ This process is then repeated for each original sample to generate the \emph{par
 
 \subsection{Supervised Fine-Tuning Setup}
 Although no additional \acrfull{sft} is performed in this work, all data samples are prepared according to established \acrshort{sft} conventions. This ensures full compatibility with existing model evaluation pipelines and facilitates the subsequent analysis of model behavior from an explainability perspective. Specifically, each sample is formatted as a user–assistant message pair, following the schema described in previous sections.
-\\\\
-\acrfull{sft} is a process in which a pretrained language model is further trained on a collection of task-specific examples, each consisting of an input (such as a user prompt) and an expected output (such as an assistant response). The goal is to optimize the model’s parameters so that its outputs closely match the ground truth responses, typically minimizing loss of cross-entropy. In the context of conversational models, \acrshort{sft} datasets are structured as lists of message objects, each message specifying a \texttt{role} (e.g., user or assistant) and a \texttt{content} field, as described in Section~\ref{subsec:message_format}. Formatting the data in this standardized way enables the fine-tuning process to teach the model not only to generate accurate responses, but also to adhere to the required conversational structure. As already mentioned, no further \acrshort{sft} is performed in this work, but all samples are formatted in this way to ensure full compatibility with existing pipelines and to support consistent evaluation.
 
 \subsubsection{Open-Instruct}
 In the context of this work, \emph{Open-Instruct} is mainly utilized to preprocess and structure the data according to established \acrshort{sft} conventions. Specifically, the framework offers utilities for converting raw user–assistant-message pairs such as those from the \emph{LIMA} dataset into the standardized chat template format (e.g., \texttt{<|user|>} and \texttt{<|assistant|>} tags) used by models like \texttt{AMD-OLMo-1B-SFT}. This ensures consistency between the data preparation procedure and the input expectations of the underlying model architecture.
@@ -199,17 +224,97 @@ In the context of this work, \emph{Open-Instruct} is mainly utilized to preproce
 To preprocess the data for \acrfull{sft}, \emph{SFTDatasetProcessor} from \emph{Open-Instruct} is used. It allows a whole dataset to be tokenized and prepared by forming the corresponding input and output sequences and naturally integrating into the \emph{HuggingFace} ecosystem for \acrshort{sft}.
 
 \section{Instance- and Gradient-based Explanation}
-\fxnote{mention batch size of 1}
+Having established the theoretical framework for gradient similarity in the previous chapter, this section illustrates the practical implementation of this method. The core idea is to leverage the loss function gradient with respect to individual data samples to identify influential training examples. As established in the fine-tuning setting (Section~\ref{sec:fine_tuning_setting}), all gradient computations are performed on single instances (i.e., with a batch size of one) to isolate the influence of individual samples. However, applying this concept to modern \acrlong{llm}s introduces significant computational and memory-related challenges. The following subsections shed light on the strategies employed to make this analysis manageable, addressing the high dimensionality of gradients, implementing an efficient candidate selection process, and utilizing intermediate results to manage the computational load.
 
 \subsection{High Dimensionality}\label{subsec:high_dimensionality}
-\fxnote{mention gradient caching on disk and why it's not suitable for our case, also calculate potential disk usage}
+The primary challenge in applying the similarity of the gradient to modern \acrlong{llm}s is the dimensionality of the parameter space. For the \texttt{AMD-OLMo-1B-SFT} model used in this work, the full model gradient $\vXsi[\theta]$, as defined in the gradient flattening process (Subsection~\ref{subsec:gradient_flattening}), is a vector in $\mathbb{R}^{M}$, where $M = 1{,}176{,}764{,}416$. Storing even a single such gradient vector, assuming 32-bit floating point precision (4 bytes per parameter), would require $1{,}176{,}764{,}416 \cdot 4$ bytes $= 4{,}707{,}057{,}664$ bytes $\approx 4.7$ GB of memory or disk space.
+\\\\
+A naive approach might involve caching the full gradient vector for each sample in the datasets $D$ and $D_p$, introduced in Section~\ref{sec:fine_tuning_setting} and Section~\ref{sec:paraphrasing_a_dataset}, respectively. However, for the filtered \emph{LIMA} dataset with $N=988$ samples, this would amount to storing nearly $2 \cdot 988 \cdot 4.7$ GB $\approx 9.3$ TB of data, which is practically infeasible for most research environments. When adding the model-generated dataset $D_m$, this increases to $\approx 14$ TB of data. Consequently, storing the full gradient vectors for each sample is not a viable strategy, necessitating an alternative that avoids materializing these high-dimensional objects altogether.
 
-\subsection{BM25-selected Samples}\label{subsec:setup_bm25}
-\fxnote{explain that by comparing the first 20 gradients NxN, the most similar examples where in the main diagonal}
-\fxnote{reduce execution time by selection top-n BM25 selected samples}
+\subsection{Efficient Candidate Selection with BM25}\label{subsec:setup_bm25}
+A naive implementation of the accuracy metric in Equation~\ref{eq:accuracy_full} would require computing the cosine similarity between each paraphrased sample gradient $\vXspi$ and every original sample gradient $\vXsj$. For the working dataset of size $N=988$, this results in a computationally intensive $N \times N$ comparison matrix of nearly one million pairs. However, preliminary analyses on smaller subsets revealed that for a given paraphrased sample $\spi$, its original counterpart $\si$ consistently produced one of the highest similarity scores among all possible pairs. This suggests that the full $N \times N$ comparison is largely redundant.
+\\\\
+To drastically reduce execution time, the BM25 ranking function, introduced in Subsection~\ref{subsec:bm25_selection}, is used to pre-filter the comparison set. As detailed in Algorithm~\ref{alg:bm25_select_samples}, instead of comparing against the entire original dataset $D$, a small candidate set $\mathcal{C}_i(b)$ is first identified, containing the $b$ most lexically similar samples for each $\spi$. For all experiments conducted in this work, this candidate size is set to $b=5$, a value deemed sufficient based on preliminary findings. This targeted approach reduces the number of expensive gradient similarity computations from $988 \times 988 = 976{,}144$ to just $988 \times 5 = 4940$ comparisons per dataset, making the overall accuracy calculation tractable without sacrificing meaningful comparisons.
 
 \subsection{Intermediate Results}\label{subsec:intermediate_results}
+Even with the reduced comparison set, the challenge of handling enormous gradient vectors during computation remains. The solution lies in recognizing that cosine similarity, as shown in Equations~\ref{eq:cosine_dot_full} through~\ref{eq:cosine_dot_subset}, is constructed entirely from dot products. Instead of calculating and storing the full, prohibitively large gradient vectors, only the constituent dot products for each layer component are computed and stored.
+\\\\
+For each pair of relevant samples $(\spi, \sj)$ where $j \in \mathcal{C}_i(b)$, the following dot products are calculated:
+\begin{itemize}
+    \item $\vXspi[\Wlk]^{\top}\vXsj[\Wlk]$ \quad (\emph{cross dot products})
+    \item $\vXspi[\Wlk]^{\top}\vXspi[\Wlk]$ \quad (\emph{paraphrased dot products})
+    \item $\vXsj[\Wlk]^{\top}\vXsj[\Wlk]$ \quad (\emph{original dot products})
+\end{itemize}
+This is done for every layer component $\Wlk$ in the model. These scalar values are lightweight and can be efficiently stored on disk. They serve as precomputed intermediate results that can be aggregated later to reconstruct the cosine similarity for any combination of layer components, as required by the Greedy Layer Selection algorithm (Section~\ref{sec:greedy_layer_selection}) and other analysis tasks. This strategy completely circumvents the need to store full gradients, thereby resolving the high-dimensionality bottleneck when storing intermediate results.
+\\\\
+All intermediate results are stored as \emph{JSON} files to retain the sample ids for later analysis. The three different dot products (\emph{cross dot products}, etc.) stated above are stored in three different files and later combined accordingly. A shortened example of the \emph{cross dot products} file for \texttt{AMD-OLMo-1B-SFT} is illustrated below.
+\begin{verbatim}
+{
+"lima_0": {
+    "lima_0": {
+        "model.embed_tokens.weight": 2.129183530807495,
+        "model.layers.0.self_attn.q_proj.weight": 0.08331464231014252,
+        "model.layers.0.self_attn.k_proj.weight": 0.12357588112354279,
+        ...
+    },
+    "lima_451": {
+        "model.embed_tokens.weight": -0.08331018686294556,
+        "model.layers.0.self_attn.q_proj.weight": -0.01116477232426405,
+        "model.layers.0.self_attn.k_proj.weight": -0.009237218648195267,
+        ...
+    },
+    ...
+},
+"lima_1": {
+    "lima_1": {
+        "model.embed_tokens.weight": 1.2379783391952515,
+        "model.layers.0.self_attn.q_proj.weight": 0.027665752917528152,
+        ...
+    },
+    ...
+},
+...
+}
+\end{verbatim}
 
-\fxnote{dot products (per layer) as intermediate results to compute gradient cosine similarity later on because full gradients have to be stored for each sample and each gradient is as big as the model size}
+\subsection{Random Projection}
 
-\fxnote{add execution times, server resources, etc.}
+The core challenge in applying random projection directly is the prohibitive size of the projection matrix $\mathbf{R}$. For a model with $M \approx 1.18$ billion parameters, a projection to a 1\% dimension results in a target dimension of $d = 0.01 \cdot M \approx 11.8$ million. The full projection matrix $\mathbf{R}$ would therefore have dimensions of approximately $11.8 \text{ million} \cdot 1.18 \text{ billion}$. Storing this matrix with 32-bit precision (4 bytes per element) would require approximately $11.8 \cdot 10^6 \cdot 1.18 \cdot 10^9 \cdot 4$ bytes $= 5.5696 \cdot 10^{16}$ bytes, a size on the order of tens of petabytes, which is computationally infeasible to generate or store in memory. Therefore, a layer-wise projection strategy is adopted, leveraging the efficient \texttt{CudaProjector} from the \texttt{trak} library~\cite{park2023trak}. This approach avoids constructing the full projection matrix at once.
+\\\\
+The total projection dimension for each configuration is distributed across the model's layer components proportionally to their size. For a given total projection dimension $d_\text{proj}$, the dimension for each individual component $(l,k)$, denoted $d_{(l,k)}$, is calculated as shown in Algorithm~\ref{alg:proportional_dim_allocation}.
+\begin{algorithm}[ht]
+\caption{Proportional Allocation of Projection Dimensions to Layer Components}
+\label{alg:proportional_dim_allocation}
+\SetKwInOut{Data}{Data}
+\SetKwInOut{Result}{Result}
+\DontPrintSemicolon
+
+\Data{
+Parameter counts $P_{(l,k)}$ for all layer components $(l,k) \in \mathcal{W}$;
+Total parameter count $M = \sum_{(l,k) \in \mathcal{W}} P_{(l,k)}$;
+Target total projection dimension $d_\text{proj}$;
+Minimal component dimension $d_\text{min} \gets 512$;
+Rounding granularity $g \gets 512$;
+}
+\Result{Projection dimension $d_{(l,k)}$ assigned to each component, $(l,k) \in \mathcal{W}$}
+\ForEach{$(l,k) \in \mathcal{W}$}{
+$p_{(l,k)} \gets \frac{P_{(l,k)}}{M}$; \tcp*{Fraction of parameters in component $(l,k)$}
+$d_\text{raw} \gets p_{(l,k)} \cdot d_\text{proj}$; \tcp*{Unrounded allocation}
+$d_\text{rounded} \gets g \cdot \operatorname{round} \left(\frac{d_\text{raw}}{g}\right)$; \tcp*{Round to nearest multiple of $g$}
+$d_{(l,k)} \gets \max(d_\text{min}, d_\text{rounded})$; \tcp*{Enforce minimal size}
+}
+\Return{$d_{(l,k)}\ |\ (l,k)\in\mathcal{W}$}
+\end{algorithm}
+\\\\
+This method ensures that larger layers are projected to correspondingly larger-dimensional spaces, preserving more of their geometric information. The rounding to a multiple of 512 is a practical choice for computational efficiency on modern GPU architectures. The result is a set of projected layer gradients that are concatenated to form the final low-dimensional representation for similarity comparison.
+\\\\
+For the benchmark, two random projection configurations were used, with the total target
+dimensions set to 1\% and 5\% of the total number of model parameters, effectively leading to $11767808$ and $58838016$. The random projection matrix is sampled from a \emph{Rademacher} distribution provided by the \texttt{trak} library~\cite{park2023trak}.
+
+\section{Hardware}\label{sec:hardware}
+To mitigate long-running tasks, all computations were executed on a \emph{Slurm} cluster with a \emph{NVIDIA DGX H100} compute node which consists of 8x NVIDIA H100 Tensor Core GPUs, 2 TB RAM and Dual Intel® Xeon® Platinum 8480C Processors with
+112 Cores total, 2.00 GHz (Base), 3.80 GHz (Max Boost). 
+\\\\
+Before starting the calculations, the dataset is sliced into $P_D$ partitions. Each partition is then assigned to a batch job and queued if necessary. Each batch job got assigned a fixed amount of resources. Hence, each job effectively had access to one NVIDIA H100 Tensor Core GPU, 86 GB RAM, and eight cores.
+
+\fxnote{maybe mention processess of the jupyter notebook after intermediate results are computed}

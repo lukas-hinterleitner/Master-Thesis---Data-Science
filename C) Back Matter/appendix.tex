@@ -10,6 +10,25 @@
     \label{tab:nomenclature}
 \end{table}
 
+\section{AMD-OLMo-1B-SFT}
+The number of parameters as a horizontal bar graph is shown in Figure~\ref{fig:parameters_per_layer_amd_olmo}.
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.63\textwidth]{figures/parameters_per_layer.png}
+    \caption{Visual representation of the parameters per layer component for model \texttt{AMD-OLMo-1B-SFT}}
+    \label{fig:parameters_per_layer_amd_olmo}
+\end{figure}
+
+\section{Preliminary Analysis of Gradient Dot Products}
+A preliminary analysis of gradient dot products between $25$ paraphrased and original samples is shown in Figure~\ref{fig:preliminary_analysis_dot_products}. As illustrated there, the main diagonal contains significantly higher values, indicating that the model is able to find the corresponding original data points. 
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=1\textwidth]{figures/preliminary_analysis_dot_products.png}
+    \caption{Preliminary analysis of gradient dot products between paraphrased and original samples.}
+    \label{fig:preliminary_analysis_dot_products}
+\end{figure}
+
 \section{Dataset Examples}
 
 \subsection{Paraphrased}\label{subsec:appendix_paraphrased_sample}
@@ -48,7 +67,7 @@ Paraphrased assistant message $s_{p_{0_G}}$:
     (Neuroscience, 2nd ed, Neuronal Migration).
 \end{verbatim}
 
-\subsection{Model-Generated}\subsection{Paraphrased}\label{subsec:appendix_model_generated_sample}
+\subsection{Model-Generated}\label{subsec:appendix_model_generated_sample}
 The model-generated equivalent for the presented example for the \emph{LIMA} dataset illustrated in Subsection~\ref{subsec:lima_dataset}.
 \\\\
 Model-generated user message $s_{m_{0_P}}$:
@@ -79,3 +98,46 @@ Model-generated assistant message $s_{m_{0_G}}$:
     Yes, brain cells can move, but it is limited to short distances within 
     the brain.
 \end{verbatim}
+
+\section{Results}
+
+\subsection{Accuracy per Layer Component}
+
+\subsubsection{Paraphrased}
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.63\textwidth]{figures/results/paraphrased/accuracy_per_layer.png}
+    \caption{Accuracy per layer in the paraphrased setting}
+    \label{fig:paraphrased_accuracy_per_layer}
+\end{figure}
+
+\subsubsection{Model-generated}
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.63\textwidth]{figures/results/model-generated/accuracy_per_layer.png}
+    \caption{Accuracy per layer in the model-generated setting}
+    \label{fig:model_generated_accuracy_per_layer}
+\end{figure}
+
+\subsection{Comparison between Layer Components and Full Gradient}
+
+\subsubsection{Paraphrased}
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.63\textwidth]{figures/results/paraphrased/layer_comparison_full_gradient.png}
+    \caption{Comparison of single layer component and full model gradient scores for the paraphrased setting.}
+    \label{fig:paraphrased_layer_comparison_full_gradient}
+\end{figure}
+
+\subsubsection{Model-generated}
+
+\subsubsection{Paraphrased}
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.63\textwidth]{figures/results/model-generated/layer_comparison_full_gradient.png}
+    \caption{Comparison of single layer component and full model gradient scores for the model-generated setting.}
+    \label{fig:model_generated_layer_comparison_full_gradient}
+\end{figure}
+
+\section{Code and Repository}
+The complete project code can be found on the following GitHub repository: \url{https://github.com/lukas-hinterleitner/master-thesis}.
