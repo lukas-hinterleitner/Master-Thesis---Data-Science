@@ -98,7 +98,7 @@ The total number of parameters $M_H$ for \texttt{AMD-OLMo-1B-SFT} with $L = 16$ 
     &=\quad 2 \cdot 50{,}304 \cdot 2{,}048 + 16 \bigl(4 \cdot 2{,}048^2 + 3 \cdot 2{,}048 \cdot 8{,}192 \bigr) \\
     &=\quad 1{,}279{,}787{,}008
 \end{align*}
-However, this number does not match the model output $M = 1{,}176{,}764{,}416$ when calling the function \texttt{model.num\_parameters()}. The difference $\Delta_M = M_H - M = 103{,}022{,}592$ happens to be exactly $\Delta_M = |V| \cdot d_x = 50{,}304 \cdot 2{,}048$ which is the number of parameters for the embedding. This indicates some form of weight-tying, and when looking into the model configuration and the model source code \cite{Groeneveld2023OLMo}, this proves to be true. Hence, the final number of trainable parameters is $M$ since the \acrshort{lm} head matrix $\mathbf{W}^{(o)} \in \mathbb{R}^{d_x \times |V|}$ is just the transpose of the input embedding matrix $\mathbf{E} \in \mathbb{R}^{|V| \times d_x}$. A visual representation of the trainable parameters per layer is shown in Figure~\ref{fig:parameters_per_layer_amd_olmo}. In summary, each layer component has a fixed number of trainable parameters as illustrated in Table~\ref{tab:parameter_components_olmo}.
+However, this number does not match the model output $M = 1{,}176{,}764{,}416$ when calling the function \texttt{model.num\_parameters()}. The difference $\Delta_M = M_H - M = 103{,}022{,}592$ happens to be exactly $\Delta_M = |V| \cdot d_x = 50{,}304 \cdot 2{,}048$ which is the number of parameters for the embedding. This indicates some form of weight-tying, and when looking into the model configuration and the model source code \cite{Groeneveld2023OLMo}, this proves to be true\footnote{HuggingFace configuration: \url{https://huggingface.co/amd/AMD-OLMo-1B-SFT/blob/main/config.json\#L21}}. Hence, the final number of trainable parameters is $M$ since the \acrshort{lm} head matrix $\mathbf{W}^{(o)} \in \mathbb{R}^{d_x \times |V|}$ is just a form of transposed input embedding matrix $\mathbf{E} \in \mathbb{R}^{|V| \times d_x}$. A visual representation of the trainable parameters per layer is shown in Figure~\ref{fig:parameters_per_layer_amd_olmo}. In summary, each layer component has a fixed number of trainable parameters as illustrated in Table~\ref{tab:parameter_components_olmo}.
 \begin{table}[htb]
     \centering
     \begin{tabular}{|l|c|c|}
@@ -113,12 +113,9 @@ However, this number does not match the model output $M = 1{,}176{,}764{,}416$ w
     \caption{Trainable parameters in AMD-OLMo-1B-SFT per layer components.}
     \label{tab:parameter_components_olmo}
 \end{table}
-\\\\
-\fxnote{how to reference tied embedding urls?}
-\url{https://huggingface.co/amd/AMD-OLMo-1B-SFT/blob/main/config.json#L21}
 
 \subsection{LIMA Dataset}\label{subsec:lima_dataset}
-The \emph{LIMA} dataset is a subset of the \emph{TÜLU} dataset, containing 1,000 carefully curated prompts and responses across various domains, including STEM fields, alongside manually authored samples \cite{zhou2023limaalignment}. Similar to other instruction-tuning datasets, it comprises pairs of prompts and corresponding generations. A prompt typically represents a user's instruction or query, specifying the task or information the model should provide. The model's output, referred to as a generation or response, directly addresses the user's prompt. An illustrative example from the \emph{LIMA} dataset is provided below. This example shows how much quality and depth the \emph{LIMA} dataset has. In this case, the example is well-referenced and closely resembles an expert-level response.
+The \emph{LIMA} dataset is a subset of the \emph{TÜLU} dataset, containing 1,000 carefully curated prompts and responses across various domains, including STEM fields, alongside manually authored samples \cite{zhou2023limaalignment}. Similar to other instruction-tuning datasets, it comprises pairs of prompts and corresponding generations. After the transformations stated Section~\ref{sec:preparing_the_data}, it will form the original dataset $D$. in A prompt typically represents a user's instruction or query, specifying the task or information the model should provide. The model's output, referred to as a generation or response, directly addresses the user's prompt. An illustrative example $(s_{0_P},s_{0_G})=s_0 \in D$ from the \emph{LIMA} dataset is provided below. This example shows how much quality and depth the \emph{LIMA} dataset has. In this case, the example is also well-referenced and closely resembles an expert-level response.
 \\\\
 User prompt $s_{0_P}$:
 \begin{verbatim}
@@ -153,12 +150,10 @@ Model-generation $s_{0_G}$:
     Neuronal Migration).
 \end{verbatim}
 
-\section{Preparing the Data}
-A small portion of the examples contain complete dialogues with multiple prompts and corresponding responses. These are removed from the dataset to keep the classic prompt/generation theme for all examples and to make them comparable. When removing those dialogue examples, the filtered dataset still consists of $N = 988$ query/response pairs.
+\section{Preparing the Data}\label{sec:preparing_the_data}
+A small portion of the examples contain complete dialogues with multiple prompts and corresponding responses. These are removed from the dataset to keep the classic prompt/generation theme for all examples and to make them comparable. When removing those dialogue examples, the filtered dataset still consists of $N = 988$ query/response pairs forming the original dataset $D$.
 
 \subsection{User/Assistant Message Format}\label{subsec:message_format}
-
-\subsubsection{General Overview}
 To ensure consistency and compatibility with modern conversational AI frameworks, each example in the dataset is represented as a list of message objects. Every message specifies both a \texttt{role}, indicating whether it originates from the user, the assistant, or optionally the system, and a \texttt{content} field containing the text.As stated previously, the dialogue examples have been filtered to retain exactly one user-assistant exchange per sample, enforcing a single-turn instruction-response structure for all pairs.
 
 \subsubsection{Roles and Their Purpose}
@@ -169,33 +164,36 @@ To ensure consistency and compatibility with modern conversational AI frameworks
 \end{itemize}
 
 \subsubsection{Dataset Schema}
-Each data point is stored in JSON format as a dictionary with a single \texttt{messages} key, which holds a list of message objects. A typical single-turn user-assistant interaction is structured as follows:
+Each data point is stored in JSON format as a dictionary with a single \texttt{messages} key, which holds a list of message objects. A typical single-turn user-assistant interaction is structured as follows.
 \begin{lstlisting}[caption={User–assistant message pair}]
 {"messages": [
-    { "role": "user", "content": "<query>" },
+    { "role": "user", "content": "<user prompt>" },
     { "role": "assistant", "content": "<model output>" }
 ]}
 \end{lstlisting}
 This uniform structure facilitates both supervised fine-tuning and later evaluation using the same message format.
 
 \subsection{Paraphrasing Samples}\label{sec:paraphrasing_samples}
-As already mentioned in Section~\ref{sec:paraphrasing_a_dataset}, the covered approach operates with two different settings, namely \emph{paraphrased} and \emph{model-generated} paraphrasing levels. For the \emph{paraphrased} case, both the query (user message) and the generation (assistant message) are altered using \emph{OpenAI GPT-4o-mini} with a seed of $42$ and a temperature of $1$. The rest of the parameters are set to default values. The corresponding system prompt is illustrated below:
-\fxnote{$LLM_{para}$}
+As already mentioned in Section~\ref{sec:paraphrasing_a_dataset}, the covered approach operates with two different settings, namely \emph{paraphrased} and \emph{model-generated} paraphrasing levels. For the \emph{paraphrased} case, both the query $s_{i_P}$ (user message) and the generation $s_{i_G}$ (assistant message) are altered using \emph{OpenAI GPT-4o-mini} with a seed of $42$ and a temperature of $1$. The rest of the parameters are set to default values. This process in denoted as $\operatorname{LLM_{para}}(\cdot)$ in Equation~\ref{eq:paraphrasing}. The corresponding system prompt is illustrated below.
+\\\\
+System prompt for $\operatorname{LLM_{para}}(\cdot)$:
 \begin{verbatim}
     You are a paraphrasing expert who is specialized in rewriting text 
     (questions, statements, etc.) without altering the content. 
     Keep in mind, that the meaning must not change after the paraphrasing. 
     Just output the paraphrased text without any additional information.
 \end{verbatim}
-The \emph{OpenAI} API also follows the message format shown in Subsection~\ref{subsec:message_format}. Consequently, when paraphrasing the example from Subsection~\ref{subsec:lima_dataset}, the \emph{OpenAI} API receives a system-user message pair object containing the previously illustrated system prompt and the text to be rephrased. Hence, all the samples and therefore, each user and assistant message from the filtered \emph{LIMA} dataset are individually sent to \emph{OpenAI} to be paraphrased. For example, the paraphrase of the the user message prompt shown in Subsection~\ref{subsec:lima_dataset} looks like:
+The \emph{OpenAI} API also follows the message format shown in Subsection~\ref{subsec:message_format}. Consequently, when paraphrasing the example $s_{0_P}$ from Subsection~\ref{subsec:lima_dataset}, the \emph{OpenAI} API receives a system-user message pair object containing the previously illustrated system prompt and the text to be rephrased. Hence, all the samples and therefore, each user and assistant message from the filtered \emph{LIMA} dataset are individually sent to \emph{OpenAI} to be paraphrased. For example, the paraphrase of the the user prompt $s_{0_P}$ shown in Subsection~\ref{subsec:lima_dataset} looks like follows.
+\\\\
+Paraphrased user prompt $\operatorname{LLM_{para}}(s_{0_P}) = s_{p_{0_P}}$:
 \begin{verbatim}
     Are brain cells capable of moving? Specifically, I’m referring to
     long-distance migration, ideally occurring within the brain.
 \end{verbatim}
-Section~\ref{subsec:appendix_paraphrased_sample} additionally illustrates the paraphrases for the messages shown in Subsection~\ref{subsec:lima_dataset}. This procedure is then repeated for all samples $\si$ in $D$ to create the dataset $D_p$ first mentioned in Section~\ref{sec:paraphrasing_a_dataset}. To create the dataset $D_m$ for the \emph{model-generated} case, the paraphrased user messages from $D_p$ are input to the model under evaluation. For each paraphrased user message $s_{p_{i_P}}$, the model generates a new assistant message $s_{m_{i_G}}$.
+Section~\ref{subsec:appendix_paraphrased_sample} additionally illustrates the paraphrases for the messages shown in Subsection~\ref{subsec:lima_dataset}. This procedure is then repeated for all samples $\si$ in $D$ to create the dataset $D_p$ mentioned in Section~\ref{sec:paraphrasing_a_dataset} and Equation~\ref{eq:paraphrasing}. To create the dataset $D_m$ for the \emph{model-generated} case, the paraphrased user messages from $D_p$ are input to the model under evaluation (\texttt{AMD-OLMo-1B-SFT}). To create a sample $\smi \in D_m$, a paraphrased user message $s_{p_{i_P}}$ is piped through the model ($\operatorname{LLM}(\cdot)$ to generate a new assistant message $s_{m_{i_G}}$ as first shown in Equation~\ref{eq:model_generated_sample}. Subsection~\ref{subsec:prepare_model_input} shows how this is done on a more technical level.
 
 \subsection{Prepare Model-generated Data Point}\label{subsec:prepare_model_input}
-Before the user message can be picked up by the model, some modifications are made to the sample. Usually, the user message is embedded inside a form of tag that tells the model where the user message starts and ends. How these tags are formatted and applied differs from model to model in the corresponding training pipeline. In the case of \texttt{AMD-OLMo-1B-SFT}, it looks like:
+Before the user message can be picked up by the model, some modifications are made to the sample. Usually, the user message is embedded inside a form of tag that tells the model where the user message starts and ends. How these tags are formatted and applied differs from model to model in the corresponding training pipeline. In the case of \texttt{AMD-OLMo-1B-SFT}, the user prompt $s_{0_P}$ after formatting looks like:
 \begin{verbatim}
     <|user|>\n
     Are brain cells capable of moving? 
@@ -203,17 +201,16 @@ Before the user message can be picked up by the model, some modifications are ma
     ideally occurring within the brain.\n
     <|assistant|>\n
 \end{verbatim}
-The \texttt{<|user|>} tag tells the model where the user message starts. The \texttt{<|assistant|>} tag tells the model where the user message ends and that the model should start writing the response. In the space of HuggingFace, this kind of format is usually called \emph{chat template}. After applying this template, the text is tokenized and converted to a numerical format by a so-called \emph{tokenizer} to make it readable for the model. For \texttt{AMD-OLMo-1B-SFT}, the tokenized and converted sequence looks like the following:
+The \texttt{<|user|>} tag tells the model where the user message starts. The \texttt{<|assistant|>} tag tells the model where the user message ends and that the model should start writing the response. In the space of HuggingFace, this kind of format is usually called \emph{chat template}. After applying this template, the text is tokenized and converted to a numerical format by a so-called \emph{tokenizer} to make it readable for the model. For \texttt{AMD-OLMo-1B-SFT}, the tokenized and converted user prompt $s_{0_P}$ sequence looks like the following:
 \begin{verbatim}
      29, 93, 4537, 49651, 187, 6723, 3998, 1341, 7032, 273,
      4886, 32, 13658, 13, 309, 1353, 14339, 281, 1048, 14,
      19893, 10346, 13, 34243, 12952, 1561, 253, 3998, 15, 187,
      29, 93, 515, 5567, 49651, 187
 \end{verbatim}
-Each number represents one token; for example, the value $187$ encodes the term \texttt{\textbackslash n}. This sequence of tokens is used to generate a response, which also represents a sequence of tokens. This sequence is then decoded using the same \emph{tokenizer} as before. Section~\ref{subsec:appendix_model_generated_sample} illustrates the decoded answer for the example shown above.
+Each number represents one token; for example, the value $187$ encodes the term \texttt{\textbackslash n}. This sequence of tokens is used to generate a response, which also represents a sequence of tokens. This sequence is then decoded using the same \emph{tokenizer} as before and yields the model-generated assistant message $s_{m_{0_G}}$. Section~\ref{subsec:appendix_model_generated_sample} illustrates the decoded answer () for the example shown above.
 \\\\
-This process is then repeated for each original sample to generate the \emph{paraphrased} dataset $D_p$ and the \emph{model-generated} dataset $D_m$. These \emph{paraphrased} and \emph{model-generated} examples are stored on disk and picked up when needed to guarantee a level of determinism when operating on this newly created dataset. 
-\fxnote{can I mention my own github repo? Maybe I can publish the dataset on HuggingFace and mention it here}
+This process is then repeated for each sample from the \emph{original} dataset\footnote{Original dataset: \url{https://huggingface.co/datasets/lukashinterleitner/LIMA-original}} to generate the \emph{paraphrased} dataset\footnote{Paraphrased dataset: \url{https://huggingface.co/datasets/lukashinterleitner/LIMA-paraphrased-GPT-4o-mini}} $D_p$ and the \emph{model-generated} dataset\footnote{Model-generated dataset: \url{https://huggingface.co/datasets/lukashinterleitner/LIMA-model-generated-amd-AMD-OLMo-1B-SFT}} $D_m$. These \emph{paraphrased} and \emph{model-generated} examples are stored on disk and picked up when needed to guarantee a level of determinism when operating on this newly created dataset.
 
 \subsection{Supervised Fine-Tuning Setup}
 Although no additional \acrfull{sft} is performed in this work, all data samples are prepared according to established \acrshort{sft} conventions. This ensures full compatibility with existing model evaluation pipelines and facilitates the subsequent analysis of model behavior from an explainability perspective. Specifically, each sample is formatted as a user–assistant message pair, following the schema described in previous sections.
@@ -227,9 +224,9 @@ To preprocess the data for \acrfull{sft}, \emph{SFTDatasetProcessor} from \emph{
 Having established the theoretical framework for gradient similarity in the previous chapter, this section illustrates the practical implementation of this method. The core idea is to leverage the loss function gradient with respect to individual data samples to identify influential training examples. As established in the fine-tuning setting (Section~\ref{sec:fine_tuning_setting}), all gradient computations are performed on single instances (i.e., with a batch size of one) to isolate the influence of individual samples. However, applying this concept to modern \acrlong{llm}s introduces significant computational and memory-related challenges. The following subsections shed light on the strategies employed to make this analysis manageable, addressing the high dimensionality of gradients, implementing an efficient candidate selection process, and utilizing intermediate results to manage the computational load.
 
 \subsection{High Dimensionality}\label{subsec:high_dimensionality}
-The primary challenge in applying the similarity of the gradient to modern \acrlong{llm}s is the dimensionality of the parameter space. For the \texttt{AMD-OLMo-1B-SFT} model used in this work, the full model gradient $\vXsi[\theta]$, as defined in the gradient flattening process (Subsection~\ref{subsec:gradient_flattening}), is a vector in $\mathbb{R}^{M}$, where $M = 1{,}176{,}764{,}416$. Storing even a single such gradient vector, assuming 32-bit floating point precision (4 bytes per parameter), would require $1{,}176{,}764{,}416 \cdot 4$ bytes $= 4{,}707{,}057{,}664$ bytes $\approx 4.7$ GB of memory or disk space.
+The primary challenge in applying the similarity of the gradient to modern \acrlong{llm}s is the dimensionality of the parameter space. For the \texttt{AMD-OLMo-1B-SFT} model used in this work, the full model gradient $\vXsi[\theta]$ for sample $\si$, as defined in the gradient flattening process (Subsection~\ref{subsec:gradient_flattening}), is a vector in $\mathbb{R}^{M}$, where $M = 1{,}176{,}764{,}416$. Storing even a single such gradient vector, assuming 32-bit floating point precision (4 bytes per parameter), would require $1{,}176{,}764{,}416 \cdot 4$ bytes $= 4{,}707{,}057{,}664$ bytes $\approx 4.7$ GB of memory or disk space.
 \\\\
-A naive approach might involve caching the full gradient vector for each sample in the datasets $D$ and $D_p$, introduced in Section~\ref{sec:fine_tuning_setting} and Section~\ref{sec:paraphrasing_a_dataset}, respectively. However, for the filtered \emph{LIMA} dataset with $N=988$ samples, this would amount to storing nearly $2 \cdot 988 \cdot 4.7$ GB $\approx 9.3$ TB of data, which is practically infeasible for most research environments. When adding the model-generated dataset $D_m$, this increases to $\approx 14$ TB of data. Consequently, storing the full gradient vectors for each sample is not a viable strategy, necessitating an alternative that avoids materializing these high-dimensional objects altogether.
+A naive approach might involve caching the full gradient vector for each sample in the datasets $D$ and $D_p$, introduced in Section~\ref{sec:fine_tuning_setting} and Section~\ref{sec:paraphrasing_a_dataset}, respectively. However, for the filtered \emph{LIMA} dataset with $N=988$ samples, this would amount to storing nearly $2 \cdot 988 \cdot 4.7$ GB $\approx 9.3$ TB of data, which is practically infeasible for most research environments. When adding the model-generated dataset $D_m$, this increases to $\approx 14$ TB of data. Consequently, storing the full gradient vectors for each sample is not a viable strategy, necessitating an alternative that avoids materializing these high-dimensional objects altogether. How this problem is approached, will be clarified in the next few sections.
 
 \subsection{Efficient Candidate Selection with BM25}\label{subsec:setup_bm25}
 A naive implementation of the accuracy metric in Equation~\ref{eq:accuracy_full} would require computing the cosine similarity between each paraphrased sample gradient $\vXspi$ and every original sample gradient $\vXsj$. For the working dataset of size $N=988$, this results in a computationally intensive $N \times N$ comparison matrix of nearly one million pairs. However, preliminary analyses on smaller subsets revealed that for a given paraphrased sample $\spi$, its original counterpart $\si$ consistently produced one of the highest similarity scores among all possible pairs. This suggests that the full $N \times N$ comparison is largely redundant.
@@ -278,7 +275,6 @@ All intermediate results are stored as \emph{JSON} files to retain the sample id
 \end{verbatim}
 
 \subsection{Random Projection}
-
 The core challenge in applying random projection directly is the prohibitive size of the projection matrix $\mathbf{R}$. For a model with $M \approx 1.18$ billion parameters, a projection to a 1\% dimension results in a target dimension of $d = 0.01 \cdot M \approx 11.8$ million. The full projection matrix $\mathbf{R}$ would therefore have dimensions of approximately $11.8 \text{ million} \cdot 1.18 \text{ billion}$. Storing this matrix with 32-bit precision (4 bytes per element) would require approximately $11.8 \cdot 10^6 \cdot 1.18 \cdot 10^9 \cdot 4$ bytes $= 5.5696 \cdot 10^{16}$ bytes, a size on the order of tens of petabytes, which is computationally infeasible to generate or store in memory. Therefore, a layer-wise projection strategy is adopted, leveraging the efficient \texttt{CudaProjector} from the \texttt{trak} library~\cite{park2023trak}. This approach avoids constructing the full projection matrix at once.
 \\\\
 The total projection dimension for each configuration is distributed across the model's layer components proportionally to their size. For a given total projection dimension $d_\text{proj}$, the dimension for each individual component $(l,k)$, denoted $d_{(l,k)}$, is calculated as shown in Algorithm~\ref{alg:proportional_dim_allocation}.

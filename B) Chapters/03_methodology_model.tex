@@ -448,8 +448,7 @@ $D^{\mathcal{L}}_{i,j}$, $D^{\mathcal{L}}_{i,i}$, $D^{\mathcal{L}}_{j,j}$ (vecto
 updates them \emph{once per newly selected index $(l,k)$}. This avoids re‑summing all previously
 selected indices at every step (turning a naive $\mathcal{O}(tP)$ re‑sum into
 $\mathcal{O}(P)$ per iteration).
-
-\begin{algorithm}[ht]
+\begin{algorithm}[htb]
 \caption{Forward Greedy Layer Selection}
 \label{alg:greedy_layer_selection}
 \DontPrintSemicolon
@@ -480,10 +479,10 @@ $\mathcal{L}\gets\varnothing$,\quad $\mathcal{R}\gets\mathcal{W}$ (remaining ind
     $\widetilde{D}_{ij} \gets D_{ij} + \delta^{(l,k)}_{i,j}$\;
     $\widetilde{D}_{ii} \gets D_{ii} + \delta^{(l,k)}_{i,i}$\;
     $\widetilde{D}_{jj} \gets D_{jj} + \delta^{(l,k)}_{j,j}$\;
-    \tcp{Vectorized reconstruction of Eq.~\eqref{eq:reconstructed_cosine}}
+    \tcp{Vectorized reconstruction of Equation~\ref{eq:reconstructed_cosine}}
     $\hat{\Gamma} \gets \widetilde{D}_{ij} \oslash \bigl(\sqrt{\widetilde{D}_{ii}}\odot \sqrt{\widetilde{D}_{jj}} + \varepsilon\bigr)$\;
     $n \gets \|\hat{\Gamma}\|_2 + \varepsilon$\; \fxnote{change notion of epsilon here, and explain in the text}
-    \tcp{Score of Eq.~\eqref{eq:rho_objective}}
+    \tcp{Score of Equation~\ref{eq:rho_objective}}
     $\rho \gets \frac{\langle \hat{\Gamma}, \Gamma^\theta \rangle}{n \cdot n_\theta}$\;
     \If{$\rho > \rho^\star$}{
         $\rho^\star \gets \rho$, \quad $(l^\star,k^\star)\gets(l,k)$\;
@@ -503,10 +502,10 @@ $\mathcal{L}\gets\varnothing$,\quad $\mathcal{R}\gets\mathcal{W}$ (remaining ind
 \subsubsection{Complexity}
 Let $L_\text{tot}=|\mathcal{W}|$ be the number of (layer) index pairs and $P$ the number of paraphrased–original pairs with $b$ BM25 selected original samples. Each greedy iteration scans all remaining indices and performs $\mathcal{O}(P)$ vector operations, yielding a worst‑case complexity of $\mathcal{O}(L_\text{tot}^2 P)$. In practice, such greedy algorithms usually stop when the objective, in this case $\rho$ plateaus. However, for the sake of completeness, early stopping is not applied to gather more insights on how the algorithm performs with increasing dimensions.
 
-\subsubsection{Numerical details.}
+\subsubsection{Numerical Details}
 The implementation adds a very small $\varepsilon$ in denominators to avoid divisions by zero and uses vectorization to (i) avoid deep dictionary lookups inside the greedy loop and (ii) keep the per‑iteration cost proportional to $P$.
 
-\subsubsection{Variants.}
+\subsubsection{Variants}
 Besides \emph{forward} selection, one could also do \emph{backward} elimination (start with all indices and iteratively remove the least helpful one) or \emph{beam} search over small subsets. Forward selection is cheaper here because we can re‑use the running accumulators $(D_{ij},D_{ii},D_{jj})$ and never need to re‑materialize full model‑sized vectors. Additionally, the focus is on small vector representations and therefore, the early results of the forward greedy-layer-selection are more interesting for this use case.
 
 \subsection{Random Projection as a Baseline}\label{subsec:random_projection_as_a_baseline}
@@ -533,3 +532,87 @@ The comparison is performed as follows:
 \end{enumerate}
 
 \fxnote{maybe mention processess of the jupyter notebook after intermediate results are computed}
+
+\subsection{Greedy Layer Selection by Retrieval Accuracy}\label{subsec:gls_accuracy}
+The forward strategy in Section~\ref{sec:greedy_layer_selection} selects layer components by maximizing the cosine similarity between reconstructed and full-model gradient similarities. In many applications, however, the end goal is \emph{retrieval}: for each paraphrased sample $\spi$, identify its original counterpart $\si$ within the BM25 candidate set $\mathcal{C}_i(b)$ (cf.\ Section~\ref{subsec:bm25_selection}). This subsection introduces a complementary greedy procedure that directly optimizes the \emph{top-1 retrieval accuracy} induced by the currently selected layer components.
+
+\subsubsection{Objective}
+Recall the per-component dot products $\delta^{(l,k)}_{i,j}$, $\delta^{(l,k)}_{i,i}$, and $\delta^{(l,k)}_{j,j}$ from Equation~\ref{eq:layer_dot_products_repeat}. For a set of selected indices $\mathcal{L}\subseteq\mathcal{W}$, define the accumulated dot products
+\[
+D^{\mathcal{L}}_{i,j}=\sum_{(l,k)\in\mathcal{L}}\delta^{(l,k)}_{i,j},\qquad
+D^{\mathcal{L}}_{i,i}=\sum_{(l,k)\in\mathcal{L}}\delta^{(l,k)}_{i,i},\qquad
+D^{\mathcal{L}}_{j,j}=\sum_{(l,k)\in\mathcal{L}}\delta^{(l,k)}_{j,j}.
+\]
+Using Equation~\ref{eq:reconstructed_cosine}, the cosine similarity reconstructed from the selected components is
+\[
+\hat{\gamma}^{\mathcal{L}}_{i,j}
+\;=\;
+\frac{D^{\mathcal{L}}_{i,j}}
+     {\sqrt{D^{\mathcal{L}}_{i,i}}\,
+      \sqrt{D^{\mathcal{L}}_{j,j}}}.
+\]
+Restricting comparisons to the BM25 candidate set $\mathcal{C}_i(b)$ (which, by construction, contains $i$), the accuracy attained by $\mathcal{L}$ is
+\begin{equation}
+\operatorname{accuracy}^{(b)}_{\mathcal{L}}(D_p,D)
+\;:=\;
+\frac{1}{N}\sum_{i=0}^{N}
+\Bigl[
+\hat{\gamma}^{\mathcal{L}}_{i,i}
+>
+\max_{j\in\mathcal{C}_i(b)\setminus\{i\}}
+\hat{\gamma}^{\mathcal{L}}_{i,j}
+\Bigr].
+\label{eq:accuracy_bm25_reconstructed}
+\end{equation}
+The greedy rule is to add, at each step, the single layer component whose inclusion yields the largest \emph{current} value of Equation~\ref{eq:accuracy_bm25_reconstructed}. As above, all statements apply identically when replacing $\spi$ with $\smi$.
+
+\subsubsection{Algorithm}
+The procedure below maintains accumulated dot products over all $(i,j)$ pairs and evaluates the accuracy objective after tentatively adding each remaining component. To ensure well-defined divisions, a small $\varepsilon>0$ is added in denominators.
+\begin{algorithm}[htb]
+\caption{Forward Greedy Layer Selection by Accuracy}
+\label{alg:greedy_layer_selection_accuracy}
+\DontPrintSemicolon
+\KwData{
+\begin{tabular}{@{}l@{}}
+BM25 candidate index sets $\{\mathcal{C}_i(b)\}_{i=0}^{N}$ (each $\mathcal{C}_i(b)$ contains $i$)\\
+Precomputed per-component dot products $\bigl\{\delta^{(l,k)}_{i,j}, \delta^{(l,k)}_{i,i}, \delta^{(l,k)}_{j,j}\bigr\}$\\
+Set of layer indices $\mathcal{W}$, small constant $\varepsilon>0$
+\end{tabular}
+}
+\KwResult{Ordered list $\bigl[((l_1,k_1), a_1), \dots, ((l_{|\mathcal{W}|},k_{|\mathcal{W}|}), a_{|\mathcal{W}|})\bigr]$ of layers and running accuracies}
+
+\BlankLine
+\textbf{Initialize accumulators} $D_{i,j}\gets 0$, $D_{i,i}\gets 0$, $D_{j,j}\gets 0$ for all pairs $(i,j)$ with $j\in\mathcal{C}_i(b)$.\;
+$\mathcal{L}\gets\varnothing$, \quad $\mathcal{R}\gets\mathcal{W}$ (remaining indices).\;
+\For{$t \gets 1$ \KwTo $|\mathcal{W}|$}{
+  $a^\star\gets -\infty$, \quad $(l^\star,k^\star)\gets\text{None}$, \quad store best temporary accumulators.\;
+  \ForEach{$(l,k)\in\mathcal{R}$}{
+    \tcp{Propose adding $(l,k)$ to the selection}
+    $\widetilde{D}_{i,j}\gets D_{i,j}+\delta^{(l,k)}_{i,j}$,\quad
+    $\widetilde{D}_{i,i}\gets D_{i,i}+\delta^{(l,k)}_{i,i}$,\quad
+    $\widetilde{D}_{j,j}\gets D_{j,j}+\delta^{(l,k)}_{j,j}$.\;
+    \tcp{Compute reconstructed similarities $\hat{\gamma}^{\mathcal{L}\cup\{(l,k)\}}_{i,j}$}
+    $\hat{\gamma}_{i,j}\gets \widetilde{D}_{i,j}\big/\bigl(\sqrt{\widetilde{D}_{i,i}}\sqrt{\widetilde{D}_{j,j}}+\varepsilon\bigr)$ for all $(i,j)$.\;
+    \tcp{Evaluate accuracy of Equation~\ref{eq:accuracy_bm25_reconstructed}}
+    $a \gets \frac{1}{N}\sum_{i=0}^{N}\Bigl[\hat{\gamma}_{i,i}>\max_{j\in\mathcal{C}_i(b)\setminus\{i\}}\hat{\gamma}_{i,j}\Bigr]$.\;
+    \If{$a > a^\star$}{
+      $a^\star\gets a$, \quad $(l^\star,k^\star)\gets(l,k)$, \quad save $\widetilde{D}$ as current best.
+    }
+  }
+  \tcp{Commit best index of this round}
+  $D_{i,j}\gets \widetilde{D}_{i,j}$,\quad $D_{i,i}\gets \widetilde{D}_{i,i}$,\quad $D_{j,j}\gets \widetilde{D}_{j,j}$.\;
+  $\mathcal{L}\gets \mathcal{L}\cup\{(l^\star,k^\star)\}$,\quad
+  $\mathcal{R}\gets \mathcal{R}\setminus\{(l^\star,k^\star)\}$.\;
+  \textbf{Store} $((l^\star,k^\star), a^\star)$ in the output list.\;
+}
+\Return ordered list.
+\end{algorithm}
+
+\subsubsection{Complexity}
+Let $L_\text{tot}=|\mathcal{W}|$ be the number of layer components and $P=\sum_{i}|\mathcal{C}_i(b)|=N\cdot b$ the number of paraphrased–candidate pairs. Each greedy iteration scans all remaining components and performs $\mathcal{O}(P)$ vector operations to update accumulators and evaluate Equation~\ref{eq:accuracy_bm25_reconstructed}, resulting in a worst-case complexity of $\mathcal{O}(L_\text{tot}^2 P)$, analogous to Algorithm~\ref{alg:greedy_layer_selection}.
+
+\subsubsection{Numerical details and ties}
+A very small $\varepsilon$ in the denominator prevents divisions by zero. When $D^{\mathcal{L}}_{i,i}D^{\mathcal{L}}_{j,j}\approx 0$, the corresponding $\hat{\gamma}_{i,j}$ is set to a well-defined finite value (e.g.\ zero or $-\infty$ before the comparison), which leaves the top-1 decision unchanged for well-conditioned pairs. Ties in the $\max$ over $j$ are broken deterministically (e.g.\ by index order). As in Section~\ref{subsec:intermediate_results}, storing and re-using component-wise dot products enables efficient recomputation without ever materializing full model-sized gradient vectors.
+
+\subsubsection{Relation to similarity-based selection.}
+Whereas Algorithm~\ref{alg:greedy_layer_selection} optimizes the agreement between reconstructed and full-model similarities (a \emph{proxy} for retrieval), Algorithm~\ref{alg:greedy_layer_selection_accuracy} directly optimizes the retrieval objective in Equation~\ref{eq:accuracy_bm25_reconstructed}. The two criteria can favor different components: layers that most closely track global similarity structure need not be those that most improve top-1 decisions within the BM25 candidate sets. In practice, both views are informative and can be reported jointly. 
