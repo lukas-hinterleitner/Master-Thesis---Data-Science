@@ -312,5 +312,3 @@ To mitigate long-running tasks, all computations were executed on a \emph{Slurm}
 112 Cores total, 2.00 GHz (Base), 3.80 GHz (Max Boost). 
 \\\\
 Before starting the calculations, the dataset is sliced into $P_D$ partitions. Each partition is then assigned to a batch job and queued if necessary. Each batch job got assigned a fixed amount of resources. Hence, each job effectively had access to one NVIDIA H100 Tensor Core GPU, 86 GB RAM, and eight cores.
-
-\fxnote{maybe mention processess of the jupyter notebook after intermediate results are computed}

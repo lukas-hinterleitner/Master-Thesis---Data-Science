@@ -531,8 +531,6 @@ The comparison is performed as follows:
     \item Finally, the cosine similarity is calculated between these concatenated, low-dimensional projected gradient vectors for each sample pair. The results of this baseline are then compared against the ground truth as well. 
 \end{enumerate}
 
-\fxnote{maybe mention processess of the jupyter notebook after intermediate results are computed}
-
 \subsection{Greedy Layer Selection by Retrieval Accuracy}\label{subsec:gls_accuracy}
 The forward strategy in Section~\ref{sec:greedy_layer_selection} selects layer components by maximizing the cosine similarity between reconstructed and full-model gradient similarities. In many applications, however, the end goal is \emph{retrieval}: for each paraphrased sample $\spi$, identify its original counterpart $\si$ within the BM25 candidate set $\mathcal{C}_i(b)$ (cf.\ Section~\ref{subsec:bm25_selection}). This subsection introduces a complementary greedy procedure that directly optimizes the \emph{top-1 retrieval accuracy} induced by the currently selected layer components.
 

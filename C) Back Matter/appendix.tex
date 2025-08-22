@@ -1,14 +1,190 @@
 \chapter{Appendix}
 \section{Nomenclature}
-\begin{table}[htb]
+
+% ---------- General indices & counts ----------
+\begin{table}[H]
     \centering
+    \small
     \begin{tabular}{ll}
-        $\theta_0$ & Model parameters at the start of training \\ 
-        $\theta_T$ & Model parameters at the end of training \\
+        \textbf{Symbol} & \textbf{Meaning} \\
+        \hline
+        $N$ & Number of samples in the (filtered) original dataset $D$ \\
+        $i, j$ & Sample indices, $i$ for (para-/model-generated) query, $j$ for original candidate \\
+        $a$ & Training iteration index \\
+        $l \in \{0,\dots,L\}$ & Layer index (0-based) \\
+        $k \in \{0,\dots,K_l\}$ & Component index within layer $l$ \\
+        $b$ & Size of the BM25 candidate set $\mathcal{C}_i(b)$ \\
+        $P=N\cdot b$ & \#pairs (paraphrased $\times$ BM25 candidates) used in evaluation \\
+        \hline
+        $\theta$ & Model parameters \\
+        $\theta_0$ & Model parameters at the start of training \\
+        $\theta_a$ & Model parameters at iteration $a$ \\
+        $\theta_T$ & Model parameters at the end of training (fine-tuned model) \\
+        $\eta_a$ & Learning rate at iteration $a$ \\
     \end{tabular}
-    \caption{General nomenclature reference}
-    \label{tab:nomenclature}
+    \caption{General indices and counts.}
+    \label{tab:nomenclature-general}
 \end{table}
+
+% ---------- Datasets, samples, tokens ----------
+\begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{ll}
+        \textbf{Symbol} & \textbf{Meaning} \\
+        \hline
+        $D=\{s_i\}_{i=0}^{N}$ & Original dataset (instruction–response pairs) \\
+        $D_p=\{s_{p_i}\}_{i=0}^{N}$ & Paraphrased dataset (prompt and response paraphrased) \\
+        $D_m=\{s_{m_i}\}_{i=0}^{N}$ & Model-generated dataset (paraphrased prompts, model outputs) \\
+        $s_i=(s_{i_P}, s_{i_G})$ & Sample $i$: prompt $s_{i_P}$ and generation $s_{i_G}$ \\
+        $s_{i_P}=s_i^{-P_i},\dots,s_i^{-1}$ & Prompt tokens of length $P_i$ \\
+        $s_{i_G}=s_i^{0},\dots,s_i^{G_i}$ & Generation tokens of length $G_i$ \\
+        $s_{p_i}=(s_{p_{i_P}}, s_{p_{i_G}})$ & Paraphrased sample \\
+        $s_{m_i}=(s_{m_{i_P}}, s_{m_{i_G}})$ & Model-generated sample ($s_{m_{i_P}}=s_{p_{i_P}}$) \\
+        $\operatorname{LLM}_{\text{para}}(\cdot)$ & Paraphrasing model/function \\
+        $\operatorname{LLM}(\cdot)$ & Model under evaluation (produces $s_{m_{i_G}}$) \\
+    \end{tabular}
+    \caption{Datasets, samples, and tokenization.}
+    \label{tab:nomenclature-data}
+\end{table}
+
+% ---------- Loss & training ----------
+\begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{ll}
+        \textbf{Symbol} & \textbf{Meaning} \\
+        \hline
+        $\mathcal{L}(s_i^j,\theta)$ & Token-level loss at token $j$ of sample $i$ \\
+        $\mathcal{L}(s_i,\theta)=\frac{1}{G_i}\sum_{j=0}^{G_i}\mathcal{L}(s_i^j,\theta)$ & Per-sample loss \\
+        $p_\theta(s_i^j \mid s_i^{-P_i},\dots,s_i^{j-1})$ & Next-token probability under the model \\
+        $\nabla_{\theta}\mathcal{L}(s_i,\theta)$ & Gradient of loss w.r.t.\ $\theta$ for sample $s_i$ \\
+        $\theta_{a+1}=\theta_a-\eta_a\nabla_{\theta}\mathcal{L}(s_a,\theta_a)$ & Gradient descent update \\
+    \end{tabular}
+    \caption{Loss and training notation.}
+    \label{tab:nomenclature-loss}
+\end{table}
+
+% ---------- Architecture & parameters ----------
+\begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{ll}
+        \textbf{Symbol} & \textbf{Meaning} \\
+        \hline
+        $\mathcal{W}=\{(l,k)\}$ & Index set of all layer components \\
+        $\mathbf{W}^{(l,k)}$ & Parameter matrix of component $k$ in layer $l$ \\
+        $L$ & Number of decoder layers \\
+        $K_l$ & Number of components in layer $l$ \\
+        $M$ & Total trainable parameters \\
+        $\mathbf{E}\in\mathbb{R}^{|V|\times d_x}$ & Input embedding matrix \\
+        $\mathbf{W}^{(o)}=\mathbf{E}^{\top}\in\mathbb{R}^{d_x\times|V|}$ & Tied LM head (output projection) \\
+        $|V|$ & Vocabulary size \\
+        $d_x$ & Hidden size \\
+        $d_{ff}$ & Feed-forward (MLP) width \\
+        $\mathbf{W}^{(l)}_{\mathrm{Q}},\mathbf{W}^{(l)}_{\mathrm{K}},\mathbf{W}^{(l)}_{\mathrm{V}},\mathbf{W}^{(l)}_{\mathrm{O}}$ & Attention Q/K/V/O projections in layer $l$ \\
+        $\mathbf{W}^{(l)}_{\text{gate}},\mathbf{W}^{(l)}_{\text{up}},\mathbf{W}^{(l)}_{\text{down}}$ & MLP gate/up/down projections in layer $l$ \\
+        $M_H$ & Naive param count without weight-tying \\
+        $\Delta_M$ & Difference due to tying ($\Delta_M=|V|\cdot d_x$ here) \\
+    \end{tabular}
+    \caption{Model/parameter notation.}
+    \label{tab:nomenclature-params}
+\end{table}
+
+% ---------- Operators & gradient flattening ----------
+\begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{ll}
+        \textbf{Symbol} & \textbf{Meaning} \\
+        \hline
+        $\operatorname{vec}_r(\cdot)$ & Row-major vectorization $\mathbb{R}^{m\times n}\!\to\!\mathbb{R}^{mn}$ \\
+        $\operatorname{col}(x_1,\dots,x_m)$ & Collector/concatenation: stack vectors vertically \\
+        $\odot,\ \oslash$ & Elementwise product and elementwise division \\
+        $\mathbf{v}_{\mathbf{W}^{(l,k)}}(s_i)=\operatorname{vec}_r\big(\nabla_{\mathbf{W}^{(l,k)}}\mathcal{L}(s_i,\theta_T)\big)$ & Flattened gradient for component $(l,k)$ \\
+        $\mathbf{v}_{\theta}(s_i)=\operatorname{col}\big(\mathbf{v}_{\mathbf{W}^{(0,0)}}(s_i),\dots,\mathbf{v}_{\mathbf{W}^{(L,K_L)}}(s_i)\big)$ & Full flattened gradient for $s_i$ \\
+        $\mathbf{v}_{\bullet}(s_i)$, $\mathbf{v}_{\bullet}[\mathcal{S}]$ & Same, restricted to a component or a set $\mathcal{S}\subseteq\mathcal{W}$ \\
+    \end{tabular}
+    \caption{Operators and flattened gradient vectors.}
+    \label{tab:nomenclature-ops}
+\end{table}
+
+% ---------- Similarities & scores ----------
+\begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{ll}
+        \textbf{Symbol} & \textbf{Meaning} \\
+        \hline
+        $\langle \mathbf{a},\mathbf{b}\rangle=\mathbf{a}^{\top}\mathbf{b}$ & Dot product \\
+        $\simcos(\mathbf{a},\mathbf{b})=\dfrac{\mathbf{a}^{\top}\mathbf{b}}{\|\mathbf{a}\|\,\|\mathbf{b}\|}$ & Cosine similarity \\
+        $\gamma_{i,j}^{\theta}=\simcos\big(\mathbf{v}_{\theta}(\,s_{p_i}\,),\mathbf{v}_{\theta}(\,s_{j}\,)\big)$ & Full-model similarity (paraphrased $\to$ original) \\
+        $\Gamma^\theta\in\mathbb{R}^{P}$ & Vector stacking all $\gamma_{i,j}^{\theta}$ over evaluated pairs \\
+        $\delta^{(l,k)}_{i,j}$ & Per-component cross dot: $\mathbf{v}_{\mathbf{W}^{(l,k)}}(s_{p_i})^{\top}\mathbf{v}_{\mathbf{W}^{(l,k)}}(s_j)$ \\
+        $\delta^{(l,k)}_{i,i},\,\delta^{(l,k)}_{j,j}$ & Per-component self-dots for $s_{p_i}$ and $s_j$ \\
+        $D^{\mathcal{L}}_{i,j}$ & Accumulated cross dot over $\mathcal{L}$: $\sum_{(l,k)\in\mathcal{L}}\delta^{(l,k)}_{i,j}$ \\
+        $\hat{\gamma}^{\mathcal{L}}_{i,j}=\dfrac{D^{\mathcal{L}}_{i,j}}{\sqrt{D^{\mathcal{L}}_{i,i}}\sqrt{D^{\mathcal{L}}_{j,j}}}$ & Reconstructed cosine from selected components \\
+        $\hat{\Gamma}^{\mathcal{L}}$ & Vector stacking all $\hat{\gamma}^{\mathcal{L}}_{i,j}$ \\
+        $\rho(\mathcal{L})=\simcos\big(\hat{\Gamma}^{\mathcal{L}},\Gamma^\theta\big)$ & Agreement with full-model similarities \\
+    \end{tabular}
+    \caption{Similarities, dot-product caches, and reconstructed scores.}
+    \label{tab:nomenclature-sims}
+\end{table}
+
+% ---------- Candidate selection & metrics ----------
+\begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{ll}
+        \textbf{Symbol} & \textbf{Meaning} \\
+        \hline
+        $\operatorname{BM25}_D(s_{p_i}, s_j)$ & BM25 score of $s_j$ for query $s_{p_i}$ over corpus $D$ \\
+        $\mathcal{C}_i(b)$ & Ordered index set of top-$b$ BM25 candidates for $s_{p_i}$ (contains $i$) \\
+        $\operatorname{accuracy}_{\theta}(D_p,D)$ & Top-1 retrieval accuracy using full gradients over all $j$ \\
+        $\operatorname{accuracy}^{(b)}_{\theta}(D_p,D)$ & BM25-restricted accuracy (compare only $j\in\mathcal{C}_i(b)$) \\
+        $\operatorname{accuracy}^{(b)}_{\mathbf{W}^{(l,k)}}(D_p,D)$ & Per-component accuracy (using $\mathbf{v}_{\mathbf{W}^{(l,k)}}$) \\
+        $\operatorname{accuracy}^{(b)}_{\mathcal{L}}(D_p,D)$ & Accuracy using the selected set $\mathcal{L}$ \\
+        $\varepsilon$ & Small constant for numerical stability in divisions \\
+    \end{tabular}
+    \caption{Candidate selection (BM25) and retrieval metrics.}
+    \label{tab:nomenclature-bm25-metrics}
+\end{table}
+
+% ---------- Greedy layer selection ----------
+\begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{ll}
+        \textbf{Symbol} & \textbf{Meaning} \\
+        \hline
+        $\mathcal{L}$ & Set of selected layer components (grows during forward greedy) \\
+        $\mathcal{R}=\mathcal{W}\setminus\mathcal{L}$ & Remaining components not yet selected \\
+        $((l_t,k_t),\,\rho_t)$ & $t$-th selected component and running similarity score \\
+        $((l_t,k_t),\,a_t)$ & $t$-th selected component and running accuracy score \\
+    \end{tabular}
+    \caption{Greedy forward layer selection notation.}
+    \label{tab:nomenclature-greedy}
+\end{table}
+
+% ---------- Random projection baseline ----------
+\begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{ll}
+        \textbf{Symbol} & \textbf{Meaning} \\
+        \hline
+        $\mathbf{R}\in\mathbb{R}^{d\times M}$ & Random projection matrix (Rademacher) for full vector (conceptual) \\
+        $\mathbf{R}^{(l,k)}\in\mathbb{R}^{d_{(l,k)}\times |\mathbf{W}^{(l,k)}|}$ & Per-component projector (used in practice) \\
+        $d,\ d_{(l,k)}$ & Projection dimensions (global / per component) \\
+        $d_{\text{proj}}$ & Target total projection dimension (budget) \\
+        $d_{\min}$, $g$ & Min per-component dim and rounding granularity \\
+        $P_{(l,k)}$ & Parameter count of component $(l,k)$ \\
+        $\mathbf{p}(s_i)$ & Concatenated projected gradient for sample $s_i$ \\
+    \end{tabular}
+    \caption{Random projection baseline notation.}
+    \label{tab:nomenclature-rp}
+\end{table}
+
 
 \section{AMD-OLMo-1B-SFT}
 The number of parameters as a horizontal bar graph is shown in Figure~\ref{fig:parameters_per_layer_amd_olmo}.
