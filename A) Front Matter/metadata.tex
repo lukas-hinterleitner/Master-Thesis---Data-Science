@@ -9,12 +9,19 @@
 % -- Add, remove and change your metadata here
 % a list of the supported fields can be found at http://texdoc.net/texmf-dist/doc/latex/pdfx/pdfx.pdf#subsection.2.3
 
-\Title{Master Thesis Computer Science Template}
+\Title{Select or Project? Evaluating Lower-dimensional Vectors for LLM Training Data Explanations}
 \Author{Ing. Lukas Hinterleitner BSc.}
-\Copyright{Copyright \copyright\ 2025 Lukas Hinterleitner}
+\Copyright{Copyright \copyright 2025 Lukas Hinterleitner}
 \Keywords{Master Thesis\sep
           Computer Science\sep
+          Data Influence\sep
           University of Vienna}
-\Subject{This is where you put the abstract.}
+\Subject{Large Language Models (LLMs) are largely opaque, making it difficult to identify which training examples influence a given prediction. Instance-based explanation methods that rely on model gradients are computationally challenging due to the high dimensionality of modern LLMs. This thesis investigates whether lower-dimensional gradient surrogates, constructed either by \textbf{selecting} a subset of layer components or by \textbf{projecting} the full gradient, can effectively reproduce instance-level explanations. The central question is: Is it more effective to select or to project?
+\\\\
+A novel and efficient retrieval-based benchmark is proposed to evaluate instance-based explanations. The task is to identify an original training sample from its paraphrased version by measuring the cosine similarity of their respective loss gradients. This benchmark is used to compare two strategies for creating low-dimensional gradient representations on a 1.2B parameter LLM: (1) a greedy forward selection algorithm that identifies a small, architecturally-informed subset of influential layer components, and (2) random projection, which maps the full gradient to a dense, lower-dimensional space.
+\\\\
+The results demonstrate that, for the retrieval task, a targeted selection of a small subset of gradient components is superior. A greedily selected subset, often comprising less than 5\% of the model's parameters and drawing heavily from MLP and attention query/output blocks, not only outperforms random projections, but also achieves higher retrieval accuracy than the full model gradient itself. This suggests that the full gradient can be a noisy and suboptimal signal for this task. Although random projection effectively preserves the global geometry of the full-gradient space, it is computationally more expensive and less accurate for the specific retrieval objective.
+\\\\
+The findings provide a clear answer: for building efficient and effective instance-based explanation tools framed as a retrieval task, selecting a small, architecturally-aware representation of the gradient is more accurate and computationally efficient than projecting the entire gradient. This work contributes an efficient benchmark for instance-based explanations, a principled comparison of dimensionality reduction strategies, and empirical evidence advocating for targeted selection over holistic projection.}
 \Org{University of Vienna}
 \end{filecontents*}

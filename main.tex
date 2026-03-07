@@ -10,18 +10,13 @@
 \makeglossaries %https://www.overleaf.com/learn/latex/glossaries
 
 %shows fixme notes
-\fxsetup{status=draft} % comment/delete this line if you want to your final output
+%\fxsetup{status=draft} % comment/delete this line if you want to your final output
 
 \usepackage[ngerman, british]{babel} %if changed to \usepackage[ngerman]{babel} "Table of contents" changes to "Inhaltsverzeichnis", "abstract" becomes "Zusammenfassung" and "references" is translated to "Literatur".
 
 
 %remove all the things you don't need and add all the things you need. you can also change the order of the elements at your will.
 \begin{document}
-
-    %Start with front matter
-    
-    %Choose the titlepage you want to use
-    
     \input{A) Front Matter/titlepage} %Creates the titlepage
     
     \clearpage
@@ -61,7 +56,7 @@
     \bibliographystyle{alpha}
 	\bibliography{bibliography}
 
-        \noindent ChatGPT and Writefull were used to rephrase sentences or words to make the language, tonality, and writing style more coherent and easier to read.
+        \noindent ChatGPT, Gemini and Writefull were used to rephrase sentences or words to make the language, tonality, and writing style more coherent and easier to read.
 	
 	\printglossary[type=\acronymtype]
     \printglossary

@@ -1,39 +1,41 @@
 \chapter{Gradient Similarity as a Method for Explanation}\label{cha:gradient_similarity}
+As outlined in the methodological overview in \autoref{sec:problem_statement}, the core problem of this thesis is to find an efficient, low-dimensional surrogate for full-model gradients that can reliably identify influential training instances. This chapter now formally introduces the core methodology that forms the basis of the retrieval-based benchmark used to address this problem. It details the components of the benchmark, including the formal fine-tuning setup (\autoref{sec:fine_tuning_setting}), the construction of the paraphrased and model-generated datasets (\autoref{sec:paraphrasing_a_dataset}), and the mathematical definition of gradient similarity used for retrieval (\autoref{sec:gradient_similarity_between_samples}). Finally, it presents the technical implementation of the two competing strategies for dimensionality reduction that are central to this work: greedy layer selection (\autoref{sec:greedy_layer_selection}) and random projection (\autoref{subsec:random_projection_as_a_baseline}).
 
 \section{Instance-based Explainability Methods}
-\fxnote{Establish setting of instance-based and furthermore gradient-based explanations, etc.}
+To explain model predictions, this work adopts an instance-based view, which traces a model's behavior back to the training examples that influenced it most \cite{DBLP:conf/icml/KohL17}. We define an example's "influence" as the gradient of the per-sample loss, computed on the final, frozen model. Our method then compares a query, a paraphrased version of a training sample, to the original data by calculating the cosine similarity of their flattened gradient vectors. This metric serves as an affinity measure, quantifying the directional alignment of the parameter updates that each sample would induce. The central assumption is that a paraphrase and its original will display highly aligned gradients, making this similarity a direct signal for identifying the source instance (visualized in \autoref{fig:gradient_cosine_similarity} and formalized in \autoref{eq:cosine_similarity_paraphrased}).
+\\\\
+This framing is (i) \emph{local}, targeting decisions at the level of single instances, (ii) \emph{static}, using the final checkpoint without reconstructing training dynamics (\autoref{subsubsec:dynamic_gradient_based_influence_estimation}), and (iii) \emph{model-agnostic}, applicable to any architecture that provides per-sample gradients of a language-modeling loss. It also \emph{does not require retraining}: only the change in the loss gradient under paraphrasing is evaluated. Explanation quality is assessed via a retrieval task: for each paraphrase, identify its original among BM25-selected candidates (\autoref{subsec:bm25_selection}) and report accuracy as in \autoref{eq:accuracy_full}–\autoref{eq:accuracy_bm25}. The remainder of the chapter formalizes the fine-tuning setup (\autoref{sec:fine_tuning_setting}), the construction of paraphrased/model-generated datasets (\autoref{sec:paraphrasing_a_dataset}), the gradient representation (\autoref{subsec:gradient_flattening}). Last but not least, low-dimensional representations via a greedy layer selection and random projections (\autoref{sec:greedy_layer_selection}–\autoref{subsec:random_projection_as_a_baseline}) are evaluated in this setup.
 
 \section{Fine-Tuning Setting}\label{sec:fine_tuning_setting}
-Given a fine-tuning training dataset $D = \{s_i\}_{i=0}^N$, where $s_i$ is the $i$-th sample that contains a sequence of tokens. In the scope of this article, the term \emph{original} refers to samples in this dataset. Each of these samples contains instructions and generations, where $s_i^{-P_i},...,s_i^{-1}$ denote the tokens of the $i$-th instruction prompt of length $P_i$, and $s_i^0,...,s_i^{G_i}$ denote the tokens of the $i$-th generation for the $i$-th prompt with a length of $G_i$.
+Given a fine-tuning training dataset $D = \{s_i\}_{i=1}^N$, where $s_i$ is the $i$-th sample that contains a sequence of tokens. In the scope of this work, the term \emph{original} refers to samples in this dataset. Each of these samples contains instructions and generations, where $s_i^{-P_i},...,s_i^{0}$ denote the tokens of the $i$-th instruction prompt of length $P_i$, and $s_i^1,...,s_i^{G_i}$ denote the tokens of the $i$-th generation for the $i$-th prompt with a length of $G_i$.
 \\\\
 Then the training of an \acrshort{llm} can be formulated as follows: 
 \begin{equation}
-    \hat{\theta} = \arg\min_{\theta} \frac{1}{\sum_{i=0}^{N} G_i} \sum_{i=0}^{N} \sum_{j=0}^{G_i} \mathcal{L}(s_i^j, \theta)
+    \hat{\theta} = \arg\min_{\theta} \frac{1}{\sum_{i=1}^{N} G_i} \sum_{i=1}^{N} \sum_{j=1}^{G_i} \mathcal{L}(s_i^j, \theta)
     \label{eq:llm_loss_function}
-\end{equation}
-where $\theta$ represents the parameters of the model and $\mathcal{L}(\cdot, \theta)$ is the loss function. The term $\frac{1}{\sum_{i=0}^{N} G_i}$ in equation \ref{eq:llm_loss_function} is the total number of generation tokens in the entire training set. Usually, for the \acrshort{llm} objective, the loss is $\mathcal{L}(s_i^j, \theta) = -\log p_\theta(s_i^j \mid s_i^{-P_i}, \ldots, s_i^{j-1})$ the negative log-likelihood of the correct token given all previous tokens. \fxnote{Maybe explain where the probabilities are coming from --> softmax} Modern \acrshort{llm} architectures use adapted versions of it or may use other loss functions. However, in this setting, the choice of loss function does not matter as long as it suits language modeling. Let $\mathcal{L}(s_i, \theta) = \frac{1}{G_i} \sum_{j=0}^{G_i} \mathcal{L}(s_i^j, \theta)$, be the loss per sample which will be relevant in the following sections.
+\end{equation} 
+where $\theta$ represents the parameters of the model and $\mathcal{L}(\cdot, \theta)$ is the loss function. The term $\frac{1}{\sum_{i=1}^{N} G_i}$ in \autoref{eq:llm_loss_function} is the total number of generation tokens in the entire training set. Usually, for the \acrshort{llm} objective, the loss is $\mathcal{L}(s_i^j, \theta) = -\log p_\theta(s_i^j \mid s_i^{-P_i}, \ldots, s_i^{j-1})$ the negative log-likelihood of the correct token given all previous tokens. Modern \acrshort{llm} architectures use adapted versions of it or may use other loss functions. However, in this setting, the choice of loss function does not matter as long as it suits language modeling. Let $\mathcal{L}(s_i, \theta) = \frac{1}{G_i} \sum_{j=1}^{G_i} \mathcal{L}(s_i^j, \theta)$, be the loss per sample which will be relevant in the following sections.
 \\\\
-Usually, machine learning models are trained using batches of training data. In the setting of this article, the batch size is set to exactly one to measure phenomena for single instances. Hence, in the training process, for iteration $a$, the parameters are updated from $\theta_{a-1}$ to $\theta_{a}$ depending only on the training sample $s_a$. 
+Usually, machine learning models are trained using batches of training data. In the setting of this work, the batch size is set to exactly one to measure phenomena for single instances. Hence, in the training process, for iteration $a$, the parameters are updated from $\theta_{a-1}$ to $\theta_{a}$ depending only on the training sample $s_a$. 
 \\\\
-Modern \acrshort{llm} training still relies on the original idea of gradient descent to update the model weights despite being more advanced in terms of convergence, regularization, memory-efficiency, etc., for example, LAMB \cite{you2020largebatchoptimizationdeep}. However, in the proposed setting, we are only looking at the gradients of the loss function with respect to each individual training sample without updating the model weights correspondingly; therefore, establishing the idea of gradient descent is sufficient here. The formulation of gradient descent for this setting is shown in equation \ref{eq:gradient_descent}:
+Modern \acrshort{llm} training still relies on the original idea of gradient descent to update the model weights despite being more advanced in terms of convergence, regularization, memory-efficiency, etc., for example, AdamW~\cite{DBLP:conf/iclr/LoshchilovH19} or LAMB~\cite{DBLP:conf/iclr/YouLRHKBSDKH20}. However, the proposed approach only considers the gradients of the loss function with respect to each individual training sample, without updating the model weights correspondingly; therefore, establishing the idea of gradient descent is sufficient here. The general formulation of gradient descent is shown in \autoref{eq:gradient_descent}:
 \begin{equation}
     \theta_{a+1} = \theta_a - \eta_a \nabla_{\theta} \mathcal{L}(s_a, \theta_a)
     \label{eq:gradient_descent}
 \end{equation}
-where $\eta_a$ is the learning rate in iteration $a$ and $\nabla_{\theta} \mathcal{L}(s_a, \theta_a)$ denotes the gradient of the loss function given $s_a$ and the current model parameters $\theta_a$ with respect to $\theta$. \cite{lin2024tokenwiseinfluentialtrainingdata}. In other words, the gradients determine how the model weights are updated based on the given training data. Hence, the gradient $\nabla_{\theta} \mathcal{L}(s_a, \theta_a)$ contains information on how the model parameters $\theta$ will be updated depending on the training data sample $s_a$. With this in mind, the effect of the gradient based on single samples will be analyzed in detail in the following chapters.
-\fxnote{should I cite gradient descent, etc.?}
+where $\eta_a$ is the learning rate in iteration $a$ and $\nabla_{\theta} \mathcal{L}(s_a, \theta_a)$ denotes the gradient of the loss function given $s_a$ and the current model parameters $\theta_a$ with respect to $\theta$ \cite{DBLP:conf/acl/LinLX024}. In other words, the gradients determine how the model weights are updated based on the given training data. Hence, the gradient $\nabla_{\theta} \mathcal{L}(s_a, \theta_a)$ contains information on how the model parameters $\theta$ will be updated depending on the training data sample $s_a$. With this in mind, the effect of the gradient based on single samples will be analyzed in detail in the following chapters.
 
 \section{Paraphrasing a Dataset}\label{sec:paraphrasing_a_dataset}
-The idea is to take a dataset $D$ on which a model was fine-tuned and paraphrase it using another \acrshort{llm}. When paraphrasing, we obtain $D_p = \{s_{p_i}\}_{i=0}^N$, a dataset where the inputs and the outputs, in other words, the prompt and the generation, are paraphrased. Hence, the semantics of the samples are preserved, while the syntax and word choice differ between $D$ and $D_p$. For that, the prompt and the generation for each sample $s_i$ are individually paraphrased to retrieve a new sample $s_{p_i}$, as illustrated in Equation \ref{eq:paraphrasing}. As a reminder, each sample is basically a tuple containing an instruction and a generation. For simplicity, let us introduce $s_{i_P}$ and $s_{i_G}$ which represent the prompt and the generation of the $i$-th sample, respectively, such as $s_i = (s_{i_P}, s_{i_G}) = (s_i^{-P_i},...,s_i^{-1}, s_i^0,...,s_i^{G_i})$.
+As introduced in the methodological overview (\autoref{subsec:methodological_overview}), the core of the evaluation benchmark relies on paraphrasing. This section formally describes this process. The idea is to take a dataset $D$ on which a model was fine-tuned and paraphrase it using another \acrshort{llm}. When paraphrasing, we obtain $D_p = \{s_{p_i}\}_{i=1}^N$, a dataset where the inputs and the outputs, in other words, the prompt and the generation, are paraphrased. Hence, the semantics of the samples are preserved, while the syntax and word choice differ between $D$ and $D_p$. For that, the prompt and the generation for each sample $s_i$ are individually paraphrased to retrieve a new sample $s_{p_i}$, as illustrated in \autoref{eq:paraphrasing}. As a reminder, each sample is basically a tuple containing an instruction (prompt) and a generation. For simplicity, let us introduce $s_{i_P}$ and $s_{i_G}$ which represent the prompt and the generation of the $i$-th sample, respectively, such as $s_i = (s_{i_P}, s_{i_G}) = (s_i^{-P_i},...,s_i^{0}, s_i^1,...,s_i^{G_i})$.
 \begin{equation}
-    s_{p_i} = 
+    \spi = 
     (
     s_{p_{i_P}},
     s_{p_{i_G}}
     ) =
     (
-        s_{p_i}^{-P_i},...,s_{p_i}^{-1},
-        s_i^0,...,s_{p_i}^{G_i}
+        \spi^{-P_i},...,\spi^{0},
+        \spi^{1},...\spi^{G_i}
     ) = 
     (
         \operatorname{LLM_{para}}(s_{i_P}), 
@@ -41,18 +43,18 @@ The idea is to take a dataset $D$ on which a model was fine-tuned and paraphrase
     )
     \label{eq:paraphrasing}
 \end{equation}
-As mentioned above, $s_{p_i}$ denotes the paraphrased version of the $i$-th sample representing a tuple of the paraphrased prompt $s_{p_{i_P}}$ and the paraphrased generation $s_{p_{i_G}}$. The function $LLM_{para}$ in Equation \ref{eq:paraphrasing} basically represents an \acrshort{llm} that is used to paraphrase a sequence of tokens as mentioned above and will be further illustrated in Section \ref{sec:paraphrasing_samples}.
+As mentioned above, $s_{p_i}$ denotes the paraphrased version of the $i$-th sample representing a tuple of the paraphrased prompt $s_{p_{i_P}}$ and the paraphrased generation $s_{p_{i_G}}$. The function $LLM_{para}$ in \autoref{eq:paraphrasing} basically represents an \acrshort{llm} that is used to paraphrase a sequence of tokens as mentioned above and will be further illustrated in \autoref{sec:paraphrasing_samples}.
 \\\\
-Furthermore, another paraphrasing setting is established by using the model under evaluation to generate the output with the paraphrased instruction prompt $s_{p_{i_P}}$ as input. This basically generates another dataset $D_m = \{s_{m_i}\}_{i=0}^N$ that is used for further evaluation in this context. As the other samples of the datasets $D$ and $D_p$, each sample $s_{m_i}$ of $D_m$ represents a tuple of prompt $s_{m_{i_P}}$ and generation $s_{m_{i_G}}$, as shown in Equation \ref{eq:model_generated_sample}.
+Furthermore, another paraphrasing setting is established by using the model under evaluation to generate the output with the paraphrased instruction prompt $s_{p_{i_P}}$ as input. This basically generates another dataset $D_m = \{s_{m_i}\}_{i=1}^N$ that is used for further evaluation in this context. As the other samples of the datasets $D$ and $D_p$, each sample $s_{m_i}$ of $D_m$ represents a tuple of prompt $s_{m_{i_P}}$ and generation $s_{m_{i_G}}$, as shown in \autoref{eq:model_generated_sample}.
 \begin{equation}
-    s_{m_i} = 
+    \smi = 
     (
     s_{m_{i_P}},
     s_{m_{i_G}}
     ) =
     (
-        s_{p_i}^{-P_i},...,s_{p_i}^{-1},
-        s_{m_i}^0,...,s_{m_i}^{G_i}
+        \spi^{-P_i},...,\spi^{0},
+        \smi^1,...,\smi^{G_i}
     ) = 
     (
         s_{p_{i_P}}, 
@@ -60,16 +62,16 @@ Furthermore, another paraphrasing setting is established by using the model unde
     )
     \label{eq:model_generated_sample}
 \end{equation}
-Technically, $s_{m_{i_G}} = s_{p_{i_G}}$, but for clarity $s_{m_{i_G}}$ will be denoted independently to establish its affiliation to $D_m$ and not be confused with an instruction for a sample in $D_p$. The function $LLM(\cdot)$ in Equation \ref{eq:model_generated_sample} basically returns the generation of the current \acrshort{llm} under evaluation and takes in a sequence of tokens $s_i^{-P_i},...,s_i^{-1}$. The dataset $D_m$ is generated to add an additional layer of obfuscation when considering the original $D$ and the paraphrased one $D_p$.
+Technically, $s_{m_{i_P}} = s_{p_{i_P}}$, but for clarity $s_{m_{i_P}}$ will be denoted independently to establish its affiliation to $D_m$ and not be confused with a prompt for a sample in $D_p$. The function $LLM(\cdot)$ in \autoref{eq:model_generated_sample} basically returns the generation of the current \acrshort{llm} under evaluation and takes in a sequence of tokens $s_i^{-P_i},...,s_i^{0}$. The dataset $D_m$ is generated to add an additional layer of obfuscation when considering the original $D$ and the paraphrased one $D_p$.
 \\\\
-Given that, the following two settings are established and, for simplicity, will be named accordingly in the following article:
+Given that, the following two settings are established and, for simplicity, will be named accordingly in the following thesis:
 \begin{itemize}
     \item \textbf{Paraphrased}: This setting refers to the evaluations regarding the dataset $D_p$. Samples $\spi$ in this setting will be called paraphrased samples.
     \item \textbf{Model-Generated}: This setting refers to the evaluation regarding the dataset $D_m$. Alternatively, in this setting, the samples $\smi$ will be called model-generated samples.
 \end{itemize}
 
 \section{Language Model Components}
-Modern \acrlong{llm}s still rely on the Transformer architecture to create appropriate text based on an input prompt. In other words, autoregressive language models, for example, the \acrfull{gpt} model series from OpenAI, predict tokens based on a sequence of input tokens using an adapted decoder-only architecture inspired by the original Transformer \cite{vaswani2023attentionneed}.
+Modern \acrlong{llm}s still rely on the Transformer architecture to create appropriate text based on an input prompt. In other words, autoregressive language models, for example, the \acrfull{gpt} model series from OpenAI, predict tokens based on a sequence of input tokens using an adapted decoder-only architecture inspired by the original Transformer \cite{DBLP:conf/nips/VaswaniSPUJGKP17}.
 
 \subsection{Different Layers and Components}\label{ssec:different_layers_and_components}
 Hence, we have many trainable parameters from different components. Some of them, for example, activation functions, input layer normalization, post-attention layer normalization, etc., usually included in every \acrlong{llm}, are not trainable and therefore no gradient of the loss function with respect to these components is calculated. For a generic \acrshort{llm} that takes in a sequence of tokens, we might have the following trainable parameters without considering positional encoding, etc.:
@@ -93,34 +95,34 @@ Hence, we have many trainable parameters from different components. Some of them
               where $d_{ff}$ is the hidden width of the MLP. It can be written as one liner: $\text{MLP}(x)=\mathbf{W}^{(2)}\bigl(\text{ReLU}(\mathbf{W}^{(1)}x+\mathbf{b}^{(1)})\bigr)+\mathbf{b}^{(2)}$, where $x$ is a training sample or in the case of \acrlong{llm}s, the output of a previous layer component.
     \end{itemize}
     
-    \item \textbf{Output Embedding}: A final linear layer projects the network output back to vocabulary logits. In some \acrshort{llm}s, the weights are tied to the input embedding \cite{press2017usingoutputembeddingimprove}:
+    \item \textbf{Output Embedding}: A final linear layer projects the network output back to vocabulary logits. In some \acrshort{llm}s, the weights are tied to the input embedding \cite{DBLP:conf/eacl/PressW17}:
           \begin{align*}
               \mathbf{W}^{(o)}=\mathbf{E}^{\top}\in\mathbb{R}^{d_x \times |V|}
           \end{align*}
           where $|V|$ is the size of the vocabulary. (Some models keep an independent $\mathbf{W}^{(o)}$ instead.)
 \end{itemize}
-As already mentioned, this is just a simplified illustration of the trainable parameters an \acrshort{llm} could have. In practice, the attention mechanism can be divided into multiple attention heads to capture different semantics in each head. For a detailed illustration of the Transformer decoder, see the original paper "Attention Is All You Need"~\cite{vaswani2023attentionneed}. Now that the notion of some trainable parameters for \acrlong{llm}s is put into context, the original assumption of gradient similarity is established in the following sections.
+As already mentioned, this is just a simplified illustration of the trainable parameters an \acrshort{llm} could have. In practice, the attention mechanism can be divided into multiple attention heads to capture different semantics in each head. For a detailed illustration of the Transformer decoder, see the original paper "Attention Is All You Need"~\cite{DBLP:conf/nips/VaswaniSPUJGKP17}. Now that the notion of trainable parameters for \acrlong{llm}s is put into context, the original assumption of gradient similarity is established in the following sections.
 
-\section{Gradient Similarity between Samples}
-TODO: illustrate the general idea; use general notation of similarity between gradients of different samples.
-
-\fxnote{the upcoming section only covers equation with $\spi$. make clear, that the calculation also are valid for $\smi$}
+\section{Gradient Similarity between Samples}\label{sec:gradient_similarity_between_samples}
+Gradients form the basis of how machine learning models are trained, as they determine the parameter updates during optimization. For a given sample $s_a$, the gradient $\nabla_{\theta}\mathcal{L}(s,\theta)$ encodes how the model weights would change if the sample is used for training. Thus, gradients carry information about the influence of a sample on the learning process. To compare this influence across samples $\spi$ and $\si$, the corresponding flattened gradients $\vXspi[\theta]$ and $\vXsi[\theta]$ (see \autoref{subsec:gradient_flattening} can be compared using a similarity measure $\operatorname{sim}\bigl(\vXspi[\theta],\,\vXsi[\theta]\bigr)$ (see \autoref{subsec:similarity_measure}. A high similarity indicates that the two samples encourage updates in similar directions, while a low or negative similarity reflects diverging effects on the model parameters.
+\\\\
+Although nearly all the equations in the upcoming sections are written explicitly for paraphrased samples $\spi \in D_p$, the same definitions apply to model-generated samples $\smi \in D_m$. In both cases, the sample is paired with an original counterpart $\si \in D$, and the flattened gradients $\vXsmi[\theta]$ can be substituted in place of $\vXspi[\theta]$ without changing the form of the cosine similarity or accuracy metrics. For clarity, the exposition uses $\spi$, but every derivation remains valid if $\spi$ is replaced by $\smi$.
 
 \subsection{Gradient Flattening}\label{subsec:gradient_flattening}
-Equation~\ref{eq:gradient_descent} illustrates how gradient descent updates the model parameters for training iteration $a$ and the current model parameters $\theta_a$. However, the setting in this article focuses on already fine-tuned models, and hence only the final model parameters $\theta_T$ are used for gradient computations. For example, the loss function gradient for a sample $s_i$ and the trained model parameters $\theta_T$ w.r.t. the model parameters $\theta$ is denoted as $\nabla_{\theta} \mathcal{L}(s_i, \theta_T)$.
+\autoref{eq:gradient_descent} illustrates how gradient descent updates the model parameters for training iteration $a$ and the current model parameters $\theta_a$. However, the setting in this work focuses on already fine-tuned models, and hence only the final model parameters $\theta_T$ are used for gradient computations. For example, the loss function gradient for a sample $s_i$ and the trained model parameters $\theta_T$ w.r.t. the model parameters $\theta$ is denoted as $\nabla_{\theta} \mathcal{L}(s_i, \theta_T)$.
 \\\\
-As illustrated in Subsection~\ref{ssec:different_layers_and_components}, the model parameter space $\theta$ consists of many different variations of matrices with different sizes and dimensions. For simplicity, denote the parameter space $\theta$ as a generic set of parameter matrices
-$\{\Wlk\}_{l=0}^L$, where $\Wlk \in \RnWlkXdWlk$. Here, $L$ denotes the number of layers, and $k$ just the $k$-th weight in layer $l$, where $k \in 0,\dots,K_l$ and $K_l$ is the number of weights inside layer $l$. Depending on which \acrshort{llm} is used, the number of layers $L$, the weights inside these layers, and the dimensions of those weights $\RnWlkXdWlk$ differ in size and dimension. The size of the model, in other words, the number of trainable parameters a model has, is shown in Equation \ref{eq:number_model_parameters}.
+As illustrated in \autoref{ssec:different_layers_and_components}, the model parameter space $\theta$ consists of many different variations of matrices with different sizes and dimensions. For simplicity, denote the parameter space $\theta$ as a generic set of parameter matrices
+$\{\Wlk\}_{l=1}^L$, where $\Wlk \in \RnWlkXdWlk$. Here, $L$ denotes the number of layers, and $k$ just the $k$-th weight in layer $l$, where $k \in 1,\dots,K_l$ and $K_l$ is the number of weights inside layer $l$. Depending on which \acrshort{llm} is used, the number of layers $L$, the weights inside these layers, and the dimensions of those weights $\RnWlkXdWlk$ differ in size and dimension. The size of the model, in other words, the number of trainable parameters a model has, is shown in \autoref{eq:number_model_parameters}.
 \begin{equation}
-    M = \sum_{l=0}^{L} \sum_{k=0}^{K_l} \nWlk + \dWlk
+    M = \sum_{l=1}^{L} \sum_{k=1}^{K_l} \nWlk \cdot \dWlk
     \label{eq:number_model_parameters}
 \end{equation}
-As an example, today, there are many different \acrlong{llm}s with different sizes, for example, Llama 3.1 consists of 405 billion parameters \cite{grattafiori2024llama3herdmodels} and, hence, for Llama 3.1, $M \approx 405,000,000,000$.
+As an example, today, there are many different \acrlong{llm}s with different sizes, for example, Llama 3.1 consists of 405 billion parameters \cite{DBLP:journals/corr/abs-2407-21783} and, hence, for Llama 3.1, $M \approx 405,000,000,000$.
 \\\\
 For simplicity, call $\nabla_{\theta} \mathcal{L}(s_i, \theta_T)$ the full model gradient for sample $s_i$. To compute this full model gradient, the gradients w.r.t. to each model weight $\nabla_{\mathbf{W}^{(l,k)}} \mathcal{L}(s_i, \theta_T) \in \RnWlkXdWlk$ have to be calculated and combined to represent the gradient w.r.t. the whole parameter space. After the computation of each individual weight gradient $\nabla_{\Wlk} \mathcal{L}(s_i, \theta_T)$, they are flattened into a gradient vector that can be calculated as: 
 \begin{align*}
     \mathbf{v}_{\Wlk}(s_i)
-    \;:=\;
+    \;\coloneqq\;
     \operatorname{vec}_r\bigl(\nabla_{\Wlk}\mathcal L(s_i,\theta_T)\bigr)
     \;\in\;\mathbb R^{\,\nWlk\dWlk}.
 \end{align*}
@@ -135,7 +137,7 @@ The row-major vectorization function $\operatorname{vec}_r(\cdot)$, is the mappi
     \end{bmatrix}
     \;\in\;\mathbb{R}^{mn}.
 \end{align*}
-\cite{curtarelli2023generalizedvectorizationinverse}. For example,
+\cite{DBLP:journals/corr/abs-2308-07928}. For example,
 \begin{align*}
     \mathbf A=
     \begin{bmatrix}
@@ -150,7 +152,7 @@ The row-major vectorization function $\operatorname{vec}_r(\cdot)$, is the mappi
 \end{align*}
 To combine all vectorized layer gradients $\mathbf{v}_{\Wlk}(s_i)$ for sample $s_i$, define the collector operator $\operatorname{col(\cdot)}$ as follows:
 \begin{align*}
-    \operatorname{col}(x_1,\dots,x_m) \;:=\;
+    \operatorname{col}(x_1,\dots,x_m) \;\coloneqq\;
     \begin{bmatrix}
     x_1 \\ \vdots \\ x_m
     \end{bmatrix} \; \in \; \mathbb{R}^{\sum_{j}{d_j}}, \quad \text{where} \; x_j \in \mathbb{R}^{d_j}.
@@ -158,12 +160,12 @@ To combine all vectorized layer gradients $\mathbf{v}_{\Wlk}(s_i)$ for sample $s
 With the above properties and operators in mind, the full flattened gradient vector for sample $s_i$ is defined as 
 \begin{align*}
     \vXsi[\theta]
-\;:=\;
+\;\coloneqq\;
 \operatorname{col}\bigl( \vXsi[\W^{(0,0)}], \vXsi[\W^{(0,1)}], \dots, \vXsi[\W^{(L,K_L)}] \bigr)
 \; 
 \in\; \mathbb{R}^{M}.
 \end{align*}
-For better understanding, the whole gradient flattening process covered in this subsection is illustrated in Figure \ref{fig:gradient_flattening}.
+For better understanding, the whole gradient flattening process covered in this subsection is illustrated in \autoref{fig:gradient_flattening}.
 \begin{figure}[ht]
     \centering
     \includegraphics[width=1\textwidth]{figures/gradient_flattening.png}
@@ -172,7 +174,7 @@ For better understanding, the whole gradient flattening process covered in this 
 \end{figure}
 As a result of the gradient flattening process and the notion of $\vXsi[\theta]$, these vectorized representations of the gradients for different samples can be compared. In other words, the similarity between these can be calculated, which is elaborated in the following section.
 
-\subsection{Similarity Measure}
+\subsection{Similarity Measure}\label{subsec:similarity_measure}
 Generally, a similarity measure is a real-valued function that quantifies the
 similarity between two entities.  There are many different ways to measure the
 similarity between two mathematical objects such as vectors.  Norms can be used
@@ -193,7 +195,7 @@ where $\varphi$ denotes the angle between them. Consequently, a large dot produc
     \item \textbf{Directional alignment}: If $\varphi$ is small (for example, $\cos{\varphi} \approx 1$), the vectors point in nearly the same direction and therefore encode similar information.
     \item \textbf{Magnitude imbalance}: Even when $\varphi$ is close to $90^{\circ}$ (poor alignment), the product can still be large if either $\|\mathbf{a}\|$ or $\|\mathbf{b}\|$ is large.
 \end{enumerate}
-The magnitude of computed gradients from a training set can vary greatly~\cite{sui2021representer} and sometimes blurs the real influence of the gradients in a training set when comparing their local influence on each other~\cite{barshan2020relatifidentifyingexplanatorytraining}. To isolate direction alone, one typically uses cosine similarity,
+The magnitude of computed gradients from a training set can vary greatly~\cite{DBLP:conf/nips/SuiWS21} and sometimes blurs the real influence of the gradients in a training set when comparing their local influence on each other~\cite{DBLP:journals/corr/abs-2003-11630}. To isolate direction alone, one typically uses cosine similarity,
 \begin{align*}
     \simcos(\mathbf{a},\mathbf{b})
     \;=\;
@@ -206,102 +208,108 @@ which normalizes both vectors and depends solely on the angle~$\varphi$.
 Using cosine similarity for gradient comparison has three practical advantages:
 \begin{enumerate}
     \item \textbf{Magnitude-invariance}: Two gradients affect the score only through their angle and not by their magnitude.
-    \item \textbf{Sensitivity to local influence}: By basically ignoring large norm outliers, cosine similarity prioritizes gradients whose direction truly matches that of the comparing gradient, which is the criterion for local influence~\cite{barshan2020relatifidentifyingexplanatorytraining}.
+    \item \textbf{Sensitivity to local influence}: By basically ignoring large norm outliers, cosine similarity prioritizes gradients whose direction truly matches that of the comparing gradient, which is the criterion for local influence~\cite{DBLP:journals/corr/abs-2003-11630}.
     \item \textbf{Interpretability}: A score of $+1$ means perfect alignment, $0$ orthogonality, and $-1$ opposition, which provides an intuitive quantity of how similar the gradients are.
 \end{enumerate}
 In short, cosine similarity isolates geometrically relevant information (direction) while
 ignoring the interference factor (magnitude), making it an appropriate choice for
-gradient-based influence analysis~\cite{Hammoudeh_2024}.
+gradient-based influence analysis~\cite{DBLP:journals/ml/HammoudehL24}.
 
 \section{High Gradient Similarity with Similar Samples}
 As already mentioned, the original assumption is that when a model is already trained on sample $\si$, then in the paraphrased setting
 \begin{equation}
-    \simcos \bigl( \vXspi, \vXsi \bigr) > \simcos \bigl( \vXspi, \vXsj \bigr), \qquad \forall\,j\in\{0,\dots,N\}\setminus\{i\}.
+    \simcos \bigl( \vXspi, \vXsi \bigr) > \simcos \bigl( \vXspi, \vXsj \bigr), \qquad \forall\,j\in\{1,\dots,N\}\setminus\{i\}.
     \label{eq:cosine_similarity_paraphrased}
 \end{equation}
 That means that the full model gradient of the paraphrased sample $\spi$ is most similar to its original sample $\si$ compared to all other original samples $\sj$. If this is the case, then the gradient-based explanation method is able to find the original data point for its paraphrased equivalent. 
 \begin{figure}[ht]
     \centering
     \includegraphics[width=1\textwidth]{figures/gradient_cosine_similarity.png}
-    \caption{Visual representation of the gradient cosine similarity comparison between $(\spi, \si)$ and $(\spi, \sj)$.}
+    \caption{Visual representation of the gradient cosine similarity comparison between the pairs $(\spi, \si)$ and $(\spi, \sj)$.}
     \label{fig:gradient_cosine_similarity}
 \end{figure}
 For both settings, this comparison is made for all samples $\spi$ and $\smi$ to calculate a score of how well the model gradients can find the equivalent original data points. 
 \begin{equation}
 \operatorname{accuracy}_\theta(D_p, D)
-\;:=\;
-\frac{1}{N}\sum_{i=0}^{N}
-\bigl[
+\coloneqq
+\frac{1}{N}\sum_{i=1}^{N}
+\Iverson*{
   \simcos \bigl( \vXspi,\vXsi \bigr)
-  \;>\;
-  \max_{\substack{j \in 0,1\dots,N  \\j \neq i}}\,
+  >
+  \max_{\substack{j \in 1,2\dots,N  \\j \neq i}}
   \simcos \bigl( \vXspi,\vXsj \bigr)
-\bigr]
+}
 \label{eq:accuracy_full}
 \end{equation}
-As shown in Equation~\ref{eq:accuracy_full}, when computing $\operatorname{accuracy}_\theta(D_p, D) \in [0,1]$, the gradient for each sample $\si$ and $\spi$ has to be calculated. Due to the high-dimensionality of these gradients in the \acrshort{llm} setting, they cannot be cached in the application's memory nor can they be stored on disk, and hence have to be recomputed for each iteration. More about this is mentioned in Subsection \ref{subsec:high_dimensionality}.
+where $\Iverson{P}$ denotes the \emph{Iverson bracket}, defined as
+\[
+\Iverson{P} \;=\;
+\begin{cases}
+1, & \text{if the statement $P$ is true}, \\
+0, & \text{otherwise}.
+\end{cases}
+\]
+As shown in \autoref{eq:accuracy_full}, when computing $\operatorname{accuracy}_\theta(D_p, D) \in [0,1]$, the gradient for each sample $\si$ and $\spi$ has to be calculated. Due to the high-dimensionality of these gradients in the \acrshort{llm} setting, they cannot be cached in the application's memory nor can they be stored on disk, and hence have to be recomputed for each iteration. More about this is mentioned in \autoref{subsec:high_dimensionality}.
 
 \subsection{BM25-selected Samples}\label{subsec:bm25_selection}
-As mentioned above, comparing each paraphrased sample gradient $\spi$ with all original sample gradients $\si$, is computationally very expensive or even practically infeasible for larger models. However, in this setting, it is not necessary to compare each paraphrased sample gradient $\spi$ with the original samples $\si$ from $D$. One could just use a well established ranking function for document retrieval in a text-based setting, in this case BM25~\cite{bm25}. 
-\fxnote{Explain what BM25 is and why it is used.}
-\fxnote{Explain what $\operatorname{BM25}_D(\spi, \sj)$ regarding corpus $D$, etc. means.}
-Algorithm \ref{alg:bm25_select_samples} demonstrates how the $b$ most similar original samples compared to the paraphrased sample $\spi$ are selected and returned using the index set $\mathcal{C}_i(k)$. If the original sample $\si$ is not in the final index set $\mathcal{C}_i(b)$, the least similar sample will be overwritten with it to ensure that the original equivalent of $\spi$ is always present for gradient comparisons.
+As identified in \autoref{subsec:core_challenge}, comparing every sample gradient is computationally infeasible. To make the retrieval task tractable, the search space is reduced using a candidate set of lexically similar samples. This section formally introduces the use of BM25 as the ranking function for this purpose. Instead of comparing $\vXspi$ with all $\vXsi, \;\; \forall \si \in D$, BM25 is used to find a small subset of lexically similar candidates~\cite{DBLP:journals/ftir/RobertsonZ09}. Algorithm~\ref{alg:bm25_select_samples} demonstrates how the $b$ most similar original samples compared to the paraphrased sample $\spi$ are selected and returned using the index set $\mathcal{C}_i(b)$. If the original sample $\si$ is not in the final index set $\mathcal{C}_i(b)$, the least similar sample will be overwritten with it to ensure that the original equivalent of $\spi$ is always present for gradient comparisons.
 \begin{algorithm}[ht]
 \caption{Retrieve the $b$ Most Similar Original Samples via BM25}
 \label{alg:bm25_select_samples}
 
-\KwData{paraphrased sample $\spi$, original dataset $D=\{\si\}_{i=0}^{N}$, desired amount $b$}
+\KwData{paraphrased sample $\spi$, original dataset $D=\{\si\}_{i=1}^{N}$, desired amount $b$}
 \KwResult{$\mathcal{C}_i(b)$ — ordered list of the $b$ most similar original samples compared to paraphrased sample $\spi$}
 
 \DontPrintSemicolon
-\For{$j \gets 0$ \KwTo $N$}{
+\For{$j \gets 1$ \KwTo $N$}{
     $\text{score}[j] \gets \operatorname{BM25}_D(\spi, \sj)$\;
 }
-$\mathcal{C}_i(b) \gets \operatorname{argsort\_topk}(\text{score}, k)$\; \Comment*[r]{The function $\operatorname{argsort\_topk}$ returns the $b$ indices with the highest BM25 scores in descending order and hence, the  samples with the most lexical overlap according to BM25. }
+$\mathcal{C}_i(b) \gets \operatorname{argsort\_topb}(\text{score}, b)$\; \Comment*[r]{The function $\operatorname{argsort\_topb}$ returns the $b$ indices with the highest BM25 scores in descending order and hence, the samples with the most lexical overlap according to BM25. }
 
 \tcp{Ensure $\mathcal{C}_i(b)$ contains the original sample $\si$ with index $i$}
 \If{$i \notin \mathcal{C}_i(b)$}{ 
-    $\mathcal{C}_i(b)[k-1] \gets i$ \tcp{overwrite the least-similar (last) entry}
+    $\mathcal{C}_i(b)[b-1] \gets i$ \tcp{overwrite the least-similar (last) entry}
 }
 
 \Return $\mathcal{C}_i(b)$
 \end{algorithm}
-Now that the notion of an index set $\mathcal{C}_i(b)$ with the most lexical overlapping samples to sample $\spi$ is established, the accuracy in Equation~\ref{eq:accuracy_full} can be improved with respect to execution time, as shown in Equation~\ref{eq:accuracy_bm25}. Operationally, restricting each comparison to the BM25 candidate set $\mathcal{C}_i(b)$ removes the all-against-all setting: instead of evaluating $N$ cosine similarities per $\spi$, only $b$ are evaluated. Consequently, the total cost drops from $\mathcal{O}(N^2)$ to $\mathcal{O}(Nb)$ (with $b \ll N$). Additionally, the overwrite rule guarantees that the true pair $(\spi,\si)$ is always present, and only the gradients for these $b$ candidates must be computed or loaded, which further reduces runtime and peak memory.
+Now that the notion of an index set $\mathcal{C}_i(b)$ with the most lexical overlapping samples to sample $\spi$ is established, the accuracy in \autoref{eq:accuracy_full} can be improved with regards to execution time, as shown in \autoref{eq:accuracy_bm25}. Operationally, restricting each comparison to the BM25 candidate set $\mathcal{C}_i(b)$ removes the all-against-all setting: instead of evaluating $N$ cosine similarities per $\spi$, only $b$ are evaluated. Consequently, the total cost drops from $\mathcal{O}(N^2)$ to $\mathcal{O}(Nb)$ (with $b \ll N$). Additionally, the overwrite rule guarantees that the connected pair $(\spi,\si)$ is always present to always measure the similarity between those counterparts. Therefore, only the gradients for these $b$ candidates per sample $\spi$ must be computed and loaded, which further reduces runtime and memory footprint.
 \begin{equation}
 \operatorname{accuracy}^{(b)}_{\theta}(D_{p},D)
-\;:=\;
-\frac{1}{N}\sum_{i=0}^{N}
-\Bigl[
-  \simcos\bigl(\vXspi,\,\vXsi\bigr)
+\coloneqq
+\frac{1}{N}\sum_{i=1}^{N}
+\Iverson*{
+  \simcos\bigl(\vXspi,\vXsi\bigr)
   >
   \max_{j\in\mathcal{C}_{i}(b)\setminus\{i\}}
-  \simcos\bigl(\vXspi,\,\vXsj\bigr)
-\Bigr]
+  \simcos\bigl(\vXspi,\vXsj\bigr)
+}
 \label{eq:accuracy_bm25}
 \end{equation}
-The accuracy of the selected samples of BM25 in Equation~\ref{eq:accuracy_bm25} is now used in this article to measure how well gradient-based explanations are able to find the corresponding original data points for the paraphrased ones. However, as illustrated in Subsection~\ref{ssec:different_layers_and_components}, \acrshort{llm}s contain many components that contribute to a full model gradient. Therefore, it makes sense to determine how much each individual layer component contributes to this setting. 
+This retrieval accuracy of \textit{BM25} selected samples (see \autoref{eq:accuracy_bm25}) is now used in this thesis to measure how well gradient-based explanations are able to find the corresponding original data points for the paraphrased ones. However, as illustrated in \autoref{ssec:different_layers_and_components}, \acrshort{llm}s contain many components that contribute to a full model gradient. Therefore, it makes sense to determine how much each individual layer component contributes to this retrieval task to determine which ones are the most relevant in this example-based setting.
 
 \subsection{Layer Component Comparisons}
-\fxnote{Elaborate why each layer is investigated}
-Equation~\ref{eq:accuracy_bm25}, illustrates the accuracy of the model by selecting samples with BM25 using the full model gradient. To measure how well each individual layer performs in this setting, this accuracy is adapted to use single layer component gradients, as shown in Equation \ref{eq:layer_accuracy_bm25}.
+To evaluate how well each individual layer component gradient performs in this retrieval task, the following calculations are employed. \autoref{eq:accuracy_bm25}, illustrates the accuracy of the model by selecting samples with BM25 using the full model gradient. To measure how well each individual layer component performs in this setting, this accuracy is adapted to use single layer component gradients, as shown in \autoref{eq:layer_accuracy_bm25}.
 \begin{equation}
   \begin{split}
     \operatorname{accuracy}^{(b)}_{\Wlk}(D_{p},D)
-    := \frac{1}{N}\sum_{i=1}^{N}
-        \Bigl[\,
-          \simcos\bigl(\vXspi[\Wlk],\vXsi[\Wlk]\bigr)
-          \\[4pt]            % ←– line break (add extra space if you like)
-    \quad>
-          \max_{j\in\mathcal{C}_{i}(b)\setminus\{i\}}
-          \simcos\bigl(\vXspi[\Wlk],\vXsj[\Wlk]\bigr)
-        \Bigr]
+    \coloneqq \frac{1}{N}\sum_{i=1}^{N}
+        \Iverson*{
+        \begin{aligned}
+            \,\simcos\bigl(\vXspi[\Wlk],\vXsi[\Wlk]\bigr)
+            \\[4pt] % ←– line break (add extra space if you like)
+            \quad>
+            \max_{j\in\mathcal{C}_{i}(b)\setminus\{i\}}
+            \simcos\bigl(\vXspi[\Wlk],\vXsj[\Wlk]\bigr)
+        \end{aligned}
+        }
   \end{split}
   \label{eq:layer_accuracy_bm25}
 \end{equation}
-As described in Section~\ref{sec:greedy_layer_selection} below, the cosine similarity of the combined individual layer components will be computed to establish the so-called Greedy-Layer Selection. For simplicity, define the combined gradient vector for two arbitrary layer components $\Wlonekone$ and $\Wltwoktwo$ and sample $\si$ as
+As described in \autoref{sec:greedy_layer_selection} below, the cosine similarity of the combined individual layer components will be computed to establish a so-called Greedy-Layer Selection. Care must be taken when combining these component gradients, as the non-linearity of cosine similarity prevents simply summing their individual similarity scores. The following paragraphs illuminate how this problem is addressed accordingly. For simplicity, define the combined gradient vector for two arbitrary layer components $\Wlonekone$ and $\Wltwoktwo$ and sample $\si$ as
 \begin{equation}
 \vXsi[\{ \Wlonekone, \Wltwoktwo \}]
-\;:=\;
+\;\coloneqq\;
 \operatorname{col}\bigl( \vXsi[\Wlonekone], \vXsi[\Wltwoktwo] \bigr).
 \end{equation}
 The cosine similarity is not a linear function due to the norms in the denominator, and therefore
@@ -312,19 +320,19 @@ The cosine similarity is not a linear function due to the norms in the denominat
     \end{split}
     \label{eq:cosine_similarity_non_linearity_example}
 \end{equation}
-In other words, Equation~\ref{eq:cosine_similarity_non_linearity_example} shows that the cosine similarity of combined gradient vectors is not equal to the sum of its individual gradient vectors due to the non-linearity of the cosine similarity. This can be generalized up to the full model gradient, like
+In other words, \autoref{eq:cosine_similarity_non_linearity_example} demonstrates that the cosine similarity of combined gradient vectors is not equal to the sum of its individual gradient vectors due to the non-linearity of the cosine similarity. This can be generalized up to the full model gradient, like
 \begin{equation}
 \begin{split}
-    \simcos\bigl(\vXspi,\,\vXsi\bigr) \neq \sum_{l=0}^{L} \sum_{k=0}^{K_l} \simcos\bigl( \vXspi[\Wlk], \, \vXsi[\Wlk] \bigr ).
+    \simcos\bigl(\vXspi,\,\vXsi\bigr) \neq \sum_{l=1}^{L} \sum_{k=1}^{K_l} \simcos\bigl( \vXspi[\Wlk], \, \vXsi[\Wlk] \bigr ).
     \label{eq:cosine_similarity_non_linearity_full}
 \end{split}
 \end{equation}
-Hence, summing up the cosine similarities for some or all individual layer component gradient vectors for $\spi$ and $\si$ does not equal the full model gradient cosine similarity of $\spi$ and $\si$. Therefore, working directly with the cosine similarity does not suit the setting if gradient vectors of multiple layer components need to be combined. 
+Hence, summing up the cosine similarities for some or all individual layer component gradient vectors for $\spi$ and $\si$ does not equal the full model gradient cosine similarity of $\spi$ and $\si$. Therefore, working directly with the cosine similarity does not suit the setting if gradient vectors of multiple layer components need to be combined. However, as shown in the next paragraph, the cosine similarity consists of dot products that are linear.
 
 \subsubsection{Linearity of the Dot product for Gradient Vectors}
 The dot product is \emph{bilinear}, i.e.\ linear in each of its arguments.
 For arbitrary vectors $\mathbf{u},\mathbf{v},\mathbf{w}\in\mathbb{R}^d$ and
-scalars $\alpha,\beta\in\mathbb{R}^d$
+scalars $\alpha,\beta\in\mathbb{R}$
 \begin{equation}
   (\alpha\mathbf{u}+\beta\mathbf{v})^{\top}\mathbf{w}
   \;=\;
@@ -337,8 +345,8 @@ Because the collector operator $\operatorname{col}(\cdot)$ stacks the sub‑vect
 \begin{equation}
   \vXspi^{\top}\,\vXsi
   \;=\;
-  \sum_{l=0}^{L}\;
-  \sum_{k=0}^{K_l}
+  \sum_{l=1}^{L}\;
+  \sum_{k=1}^{K_l}
     \vXspi[\Wlk]^{\top}\,
     \vXsi[\Wlk].
   \label{eq:dot_grad_decompose}
@@ -357,17 +365,17 @@ Consequently, cosine similarity is based on nothing more than dot products. For 
         \sqrt{\vXsi^{\top}\vXsi}}\\[12pt]
   \;=\;
   \frac{\displaystyle
-        \sum_{l=0}^{L}\sum_{k=0}^{K_l}
+        \sum_{l=1}^{L}\sum_{k=1}^{K_l}
         \vXspi[\Wlk]^{\top}\vXsi[\Wlk]}
        {\displaystyle
-        \sqrt{\sum_{l=0}^{L}\sum_{k=0}^{K_l}
+        \sqrt{\sum_{l=1}^{L}\sum_{k=1}^{K_l}
                \vXspi[\Wlk]^{\top}\vXspi[\Wlk]}\;
-        \sqrt{\sum_{l=0}^{L}\sum_{k=0}^{K_l}
+        \sqrt{\sum_{l=1}^{L}\sum_{k=1}^{K_l}
                \vXsi[\Wlk]^{\top}\vXsi[\Wlk]}}.
 \end{split}
 \label{eq:cosine_dot_full}
 \end{equation}
-The numerator in Equation~\ref{eq:cosine_dot_full} captures the \emph{directional alignment} of the two gradients, while the denominator normalizes by their magnitudes. Consequently, for a single layer component $\Wlk$
+The numerator in \autoref{eq:cosine_dot_full} captures the \emph{directional alignment} of the two gradients, while the denominator normalizes by their magnitudes. Consequently, for a single layer component $\Wlk$
 \begin{equation}
   \simcos\bigl(\vXspi[\Wlk],\vXsi[\Wlk]\bigr)
   \;=\;
@@ -382,74 +390,79 @@ $\operatorname{col}(\cdot)$ and applying the same reasoning yields
   \simcos\bigl(\vXspi[\mathcal{S}],\vXsi[\mathcal{S}]\bigr)
   \;=\;
   \frac{\vXspi[\mathcal{S}]^{\top}\vXsi[\mathcal{S}]}
-       {\sqrt{\vXspi[\mathcal{S}]^{\top}\vXspi[\mathcal{S}]}\,
+       {\sqrt{\vXspi[\mathcal{S}]^{\top}\vXspi[\mathcal{S}]}
         \sqrt{\vXsi[\mathcal{S}]^{\top}\vXsi[\mathcal{S}]}}.
   \label{eq:cosine_dot_subset}
 \end{equation}
-These reformulations show that the cosine similarity can always be evaluated by using dot products. This observation is utilized in the following Section~\ref{sec:greedy_layer_selection}, where the gradients of selected layer components are incrementally combined. Additionally, these intermediate dot products can be easily stored on the disk and later be picked up for further analysis. This is briefly described in Section~\ref{subsec:intermediate_results}.
+These reformulations show that the cosine similarity can always be evaluated by using dot products. This observation is utilized in the following \autoref{sec:greedy_layer_selection}, where the gradients of selected layer components are incrementally combined. Additionally, these intermediate dot products can be easily stored on the disk and later be picked up for further analysis. This is briefly described in \autoref{subsec:intermediate_results}.
 
-\section{Greedy Layer Selection (Forward)}\label{sec:greedy_layer_selection}
-\fxnote{Introduce general idea and why it is interesting}
-\fxnote{Explain why forward greedy selection is preferred instead of backward ...}
-The aim of this section is to select, \emph{greedily and forward}, a sequence of layer components whose \emph{combined} gradients best reproduce the full–model cosine similarities
-$\gamma_{i,j}^{\theta} = \simcos\bigl(\vXspi,\vXsj\bigr)$ between all paraphrased–original sample pairs.
+\section{Greedy Layer Selection}\label{sec:greedy_layer_selection}
+In addition to analyzing single layer components, this section introduces a greedy selection algorithm that iteratively builds a subset of components whose combined gradients are most informative. The goal is to find a low-dimensional representation that effectively preserves the explanatory power of the full-model gradient. This selection can be guided by two different objectives: either by replicating the full-model's similarity scores or by directly maximizing the task-specific retrieval accuracy.
 
-\subsection{Prerequisites and Notation}\label{ssec:gls_prereq}
-Let
+\subsection{Prerequisites and Notation}
+The forward greedy approach relies on a common set of precomputed values and definitions. Let
 \[
-\mathcal{W} \;=\; \bigl\{\, (l,k) \;\big|\; 0 \le l \le L,\; 0 \le k \le K_l \bigr\}
+\mathcal{W} \;=\; \bigl\{\, (l,k) \;\big|\; 1 \le l \le L,\; 1 \le k \le K_l \bigr\}
 \]
-denote the \emph{index set} of all layer components of the model (cf.\ Section~\ref{ssec:different_layers_and_components}).
-For each index pair $(l,k)\in\mathcal{W}$, write $\W^{(l,k)}$ for the corresponding layer component. For every $(l,k) \in \mathcal{W}$ and every paraphrased–original pair $(i,j)$ we assume the following \emph{dot products} are precomputed and stored (Section~\ref{subsec:intermediate_results}):
+denote the \emph{index set} of all layer components of the model (cf.\ \autoref{ssec:different_layers_and_components}). For every index pair $(l,k) \in \mathcal{W}$ and every sample pair $(i,j)$ representing a paraphrased sample $\spi$ and a candidate original $\sj$, the following per-component \emph{dot products} are precomputed and stored:
 \begin{equation}
 \begin{split}
-\delta^{(l,k)}_{i,j} \;&:=\; \vXspi[\Wlk]^{\top}\vXsj[\Wlk],\\
-\delta^{(l,k)}_{i,i} \;&:=\; \vXspi[\Wlk]^{\top}\vXspi[\Wlk],\\
-\delta^{(l,k)}_{j,j} \;&:=\; \vXsj[\Wlk]^{\top}\vXsj[\Wlk].
+\delta^{(l,k)}_{i,j} \;&\coloneqq\; \vXspi[\Wlk]^{\top}\vXsj[\Wlk],\\
+\delta^{(l,k)}_{i,i} \;&\coloneqq\; \vXspi[\Wlk]^{\top}\vXspi[\Wlk],\\
+\delta^{(l,k)}_{j,j} \;&\coloneqq\; \vXsj[\Wlk]^{\top}\vXsj[\Wlk].
 \end{split}
-\label{eq:layer_dot_products_repeat}
+\label{eq:layer_dot_products}
 \end{equation}
-For any subset $\mathcal{L}\subseteq\mathcal{W}$ of already selected \emph{indices}, define the \emph{accumulated} dot products
+For any subset of selected indices $\mathcal{L}\subseteq\mathcal{W}$, the \emph{accumulated} dot products are defined by summing over the components in that subset:
 \[
-D^{\mathcal{L}}_{i,j} := \sum_{(l,k)\in\mathcal{L}}\delta^{(l,k)}_{i,j}, \qquad
-D^{\mathcal{L}}_{i,i} := \sum_{(l,k)\in\mathcal{L}}\delta^{(l,k)}_{i,i}, \qquad
-D^{\mathcal{L}}_{j,j} := \sum_{(l,k)\in\mathcal{L}}\delta^{(l,k)}_{j,j}.
+D^{\mathcal{L}}_{i,j} \coloneqq \sum_{(l,k)\in\mathcal{L}}\delta^{(l,k)}_{i,j}, \qquad
+D^{\mathcal{L}}_{i,i} \coloneqq \sum_{(l,k)\in\mathcal{L}}\delta^{(l,k)}_{i,i}, \qquad
+D^{\mathcal{L}}_{j,j} \coloneqq \sum_{(l,k)\in\mathcal{L}}\delta^{(l,k)}_{j,j}.
 \]
-Using only the components with indices in $\mathcal{L}$, the \emph{reconstructed} cosine similarity between $\spi$ and $\sj$ is
+Using only these accumulated values, the \emph{reconstructed} cosine similarity between $\spi$ and $\sj$ for the components in $\mathcal{L}$ is:
 \begin{equation}
 \hat{\gamma}^{\mathcal{L}}_{i,j}
-\;:=\;
+\;\coloneqq\;
 \frac{D^{\mathcal{L}}_{i,j}}
      {\sqrt{D^{\mathcal{L}}_{i,i}}\,
       \sqrt{D^{\mathcal{L}}_{j,j}}}.
 \label{eq:reconstructed_cosine}
 \end{equation}
-Let $\Gamma^\theta \in \mathbb{R}^{P}$ be the vector that \emph{stacks} all full‑model cosine similarities $\gamma_{i,j}^{\theta}$ for every fixed ordering of the $P$ paraphrased–original pairs $(i,j)$, and let $\hat{\Gamma}^{\mathcal{L}} \in \mathbb{R}^{P}$ stack the reconstructed values $\hat{\gamma}^{\mathcal{L}}_{i,j}$ in the  emph{same} order. In this case $P = N \cdot b$, the number of paraphrased samples times the number of $b$ BM25 selected original samples. As our \emph{goodness (objective) score} for a candidate set $\mathcal{L}$ we use the cosine similarity between these two vectors:
+
+\subsection{Optimization Objectives}
+The greedy algorithm iteratively adds the layer component that best improves a given objective score. Two distinct objectives are explored.
+
+\subsubsection{Objective 1: Replicating Full-Model Similarity}
+The first objective is to select a subset of components whose combined gradients best reproduce the cosine similarities of the full model. Let $\Gamma^\theta \in [-1, 1]^P$ be the vector that stacks all full-model cosine similarities $\gamma_{i,j}^{\theta} = \simcos\bigl(\vXspi,\vXsj\bigr)$ for all $P = N \cdot b$ pairs of paraphrased samples and their BM25-selected candidates. Similarly, let $\hat{\Gamma}^{\mathcal{L}}$ be the vector of reconstructed similarities $\hat{\gamma}^{\mathcal{L}}_{i,j}$ for a subset $\mathcal{L}$. The objective is to maximize the cosine similarity between these two vectors:
 \begin{equation}
-\rho(\mathcal{L}) \;:=\;
+\rho(\mathcal{L}) \;\coloneqq\;
 \simcos\bigl(\hat{\Gamma}^{\mathcal{L}}, \Gamma^\theta\bigr).
 \label{eq:rho_objective}
 \end{equation}
+A higher $\rho(\mathcal{L})$ expresses more similar scores and, therefore, indicates that the subset $\mathcal{L}$ better captures the overall geometric relationships present in the full-model gradients.
 
-\paragraph{Goal.}
-Starting from $\mathcal{L}_0=\varnothing$, we seek an \emph{ordering} of index pairs
-$\bigl((l_1,k_1), (l_2,k_2), \dots\bigr)$ picked one by one such that the running score
-$\rho(\mathcal{L}_t)$ improves as quickly as possible:
-\[
-\mathcal{L}_{t+1} \;=\; \mathcal{L}_t \cup \bigl\{(l^\star,k^\star)\bigr\}
-\quad\text{with}\quad
-(l^\star,k^\star) \in \arg\max_{(l,k)\in\mathcal{W}\setminus\mathcal{L}_t}
-\rho\bigl(\mathcal{L}_t \cup \{(l,k)\}\bigr).
-\]
+\subsubsection{Objective 2: Maximizing Retrieval Accuracy}
+The second objective is more direct: select components that maximize the final retrieval accuracy. Using the reconstructed similarities from \autoref{eq:reconstructed_cosine}, the retrieval accuracy for a subset $\mathcal{L}$ is defined as:
+\begin{equation}
+\operatorname{accuracy}^{(b)}_{\mathcal{L}}(D_p,D)
+\;\coloneqq\;
+\frac{1}{N}\sum_{i=1}^{N}
+\Iverson*{
+\hat{\gamma}^{\mathcal{L}}_{i,i}
+>
+\max_{j\in\mathcal{C}_i(b)\setminus\{i\}}
+\hat{\gamma}^{\mathcal{L}}_{i,j}
+}
+.
+\label{eq:accuracy_bm25_reconstructed}
+\end{equation}
+This objective directly optimizes for the end-task performance. The two criteria can favor different components: layers that most closely track the global similarity structure (Objective 1) are not necessarily the same as those that are most decisive for distinguishing the correct original sample within its specific BM25 candidate set (Objective 2).
 
-\subsection{Algorithm}\label{subsec:gls_algo}
-The forward greedy strategy below maintains the accumulators
-$D^{\mathcal{L}}_{i,j}$, $D^{\mathcal{L}}_{i,i}$, $D^{\mathcal{L}}_{j,j}$ (vectorized over all pairs $(i,j)$) and
-updates them \emph{once per newly selected index $(l,k)$}. This avoids re‑summing all previously
-selected indices at every step (turning a naive $\mathcal{O}(tP)$ re‑sum into
-$\mathcal{O}(P)$ per iteration).
+\subsection{Forward Greedy Selection Algorithms}
+Starting from an empty set $\mathcal{L}_0=\varnothing$, the greedy strategy iteratively builds a sequence of nested subsets $\mathcal{L}_1 \subset \mathcal{L}_2 \subset \dots$. At each step $t$, it selects the best component $(l^\star,k^\star)$ from the remaining candidates $\mathcal{W}\setminus\mathcal{L}_{t-1}$ to add to the current set, forming $\mathcal{L}_t = \mathcal{L}_{t-1} \cup \{(l^\star,k^\star)\}$. The "best" component is the one that maximizes the chosen objective function, either $\rho(\mathcal{L}_t)$ or $\operatorname{accuracy}^{(b)}_{\mathcal{L}_t}(D_p,D)$. The following algorithms formalize this process for each objective.
+
 \begin{algorithm}[htb]
-\caption{Forward Greedy Layer Selection}
+\caption{Forward Greedy Layer Selection by Similarity}
 \label{alg:greedy_layer_selection}
 \DontPrintSemicolon
 \KwData{
@@ -479,11 +492,11 @@ $\mathcal{L}\gets\varnothing$,\quad $\mathcal{R}\gets\mathcal{W}$ (remaining ind
     $\widetilde{D}_{ij} \gets D_{ij} + \delta^{(l,k)}_{i,j}$\;
     $\widetilde{D}_{ii} \gets D_{ii} + \delta^{(l,k)}_{i,i}$\;
     $\widetilde{D}_{jj} \gets D_{jj} + \delta^{(l,k)}_{j,j}$\;
-    \tcp{Vectorized reconstruction of Equation~\ref{eq:reconstructed_cosine}}
+    \tcp{Vectorized reconstruction of \autoref{eq:reconstructed_cosine}}
     $\hat{\Gamma} \gets \widetilde{D}_{ij} \oslash \bigl(\sqrt{\widetilde{D}_{ii}}\odot \sqrt{\widetilde{D}_{jj}} + \varepsilon\bigr)$\;
-    $n \gets \|\hat{\Gamma}\|_2 + \varepsilon$\; \fxnote{change notion of epsilon here, and explain in the text}
-    \tcp{Score of Equation~\ref{eq:rho_objective}}
-    $\rho \gets \frac{\langle \hat{\Gamma}, \Gamma^\theta \rangle}{n \cdot n_\theta}$\;
+    $n \gets \|\hat{\Gamma}\|_2$\;
+    \tcp{Score of \autoref{eq:rho_objective}}
+    $\rho \gets \frac{\langle \hat{\Gamma}, \Gamma^\theta \rangle}{n \cdot n_\theta + \varepsilon}$\;
     \If{$\rho > \rho^\star$}{
         $\rho^\star \gets \rho$, \quad $(l^\star,k^\star)\gets(l,k)$\;
         $D^\star_{ij}\gets \widetilde{D}_{ij}$, $D^\star_{ii}\gets \widetilde{D}_{ii}$, $D^\star_{jj}\gets \widetilde{D}_{jj}$\;
@@ -494,85 +507,17 @@ $\mathcal{L}\gets\varnothing$,\quad $\mathcal{R}\gets\mathcal{W}$ (remaining ind
   $\mathcal{L}\gets \mathcal{L}\cup\{(l^\star,k^\star)\}$,\quad
   $\mathcal{R}\gets \mathcal{R}\setminus\{(l^\star,k^\star)\}$\;
   \textbf{Store} $((l^\star,k^\star), \rho^\star)$ in the output list.\;
-  \tcp{Optional early stop: if $\rho^\star$ saturates or $t$ reaches desired budget}
 }
 \Return ordered list.
 \end{algorithm}
 
-\subsubsection{Complexity}
-Let $L_\text{tot}=|\mathcal{W}|$ be the number of (layer) index pairs and $P$ the number of paraphrased–original pairs with $b$ BM25 selected original samples. Each greedy iteration scans all remaining indices and performs $\mathcal{O}(P)$ vector operations, yielding a worst‑case complexity of $\mathcal{O}(L_\text{tot}^2 P)$. In practice, such greedy algorithms usually stop when the objective, in this case $\rho$ plateaus. However, for the sake of completeness, early stopping is not applied to gather more insights on how the algorithm performs with increasing dimensions.
-
-\subsubsection{Numerical Details}
-The implementation adds a very small $\varepsilon$ in denominators to avoid divisions by zero and uses vectorization to (i) avoid deep dictionary lookups inside the greedy loop and (ii) keep the per‑iteration cost proportional to $P$.
-
-\subsubsection{Variants}
-Besides \emph{forward} selection, one could also do \emph{backward} elimination (start with all indices and iteratively remove the least helpful one) or \emph{beam} search over small subsets. Forward selection is cheaper here because we can re‑use the running accumulators $(D_{ij},D_{ii},D_{jj})$ and never need to re‑materialize full model‑sized vectors. Additionally, the focus is on small vector representations and therefore, the early results of the forward greedy-layer-selection are more interesting for this use case.
-
-\subsection{Random Projection as a Baseline}\label{subsec:random_projection_as_a_baseline}
-To validate that the Greedy Layer Selection algorithm identifies a genuinely influential subset of layer components, its performance is compared with a random projection baseline. This baseline helps to answer the question: Does the greedy method significantly outperform a random selection of an equivalent number of parameters?
-\\\\
-The \acrfull{jl} lemma suggests that even a random projection can preserve the geometry of the data, making it a non-trivial benchmark \cite{johnson_lindenstrauss}. In this context, the baseline is constructed by projecting the entire gradient vector into a lower-dimensional space. The full, high-dimensional gradient vector for a sample $s_i$ is denoted by $\vXsi[\theta] \in \mathbb{R}^M$. A random projection matrix $\mathbf{R} \in \mathbb{R}^{d \times M}$, where $d \ll M$, is used to map this gradient to a lower-dimensional space. The projected gradient vector, $\mathbf{p}(s_i) \in \mathbb{R}^d$, is defined as:
-\begin{equation}
-    \mathbf{p}(s_i) := \frac{1}{\sqrt{d}} \mathbf{R} \, \vXsi[\theta]
-\end{equation}
-where $d$ is the target dimension of the projection \cite{rakhshan2022rademacherrandomprojectionstensor}.
-\\\\
-However, due to computational constraints that prevent materializing the full gradient vector $\vXsi[\theta]$ at once, a layer-wise projection strategy is implemented. For each layer component $\Wlk$, a separate random matrix $\mathbf{R}^{(l,k)} \in \mathbb{R}^{d_{l,k} \times |\Wlk|}$ is used to project the corresponding layer gradient $\vXsi[\Wlk]$, where $d_{l,k}$ is the projection dimension for that layer, proportional to its number of parameters $|\Wlk|$. The final low-dimensional representation is obtained by concatenating these individual projections:
-\begin{equation}
-    \mathbf{p}(s_i) := \operatorname{col}\left( \frac{1}{\sqrt{d_{0,0}}} \mathbf{R}^{(0,0)} \vXsi[\W^{(0,0)}], \dots, \frac{1}{\sqrt{d_{L,K_L}}} \mathbf{R}^{(L,K_L)} \vXsi[\W^{(L,K_L)}] \right).
-\end{equation}
-The cosine similarity is then computed between these resulting projected vectors $\mathbf{p}(s_i)$ and $\mathbf{p}(s_j)$ for each sample pair.
-\\\\
-The comparison is performed as follows:
-\begin{enumerate}
-    \item The {full-model gradient similarity} is computed for each sample pair $(\spi, \sj)$ to establish a ground truth. This involves calculating the gradient for each sample, flattening the gradient tensors for all layers into a single high-dimensional vector $\vXsi[\theta]$, and then computing the cosine similarity between these flattened vectors.
-    \item The Greedy Layer Selection (Algorithm \ref{alg:greedy_layer_selection}) is executed to iteratively build a subset of layer components whose combined gradients best approximate the ground-truth similarities.
-    \item A layer-wise random projection of the gradients is performed as a baseline. For each sample, the gradient vector of every individual layer component $\vXsi[\Wlk]$ is projected separately into a lower-dimensional space. These individual projected vectors are then concatenated to form a single, final low-dimensional representation of the full model gradient.
-    \item Finally, the cosine similarity is calculated between these concatenated, low-dimensional projected gradient vectors for each sample pair. The results of this baseline are then compared against the ground truth as well. 
-\end{enumerate}
-
-\subsection{Greedy Layer Selection by Retrieval Accuracy}\label{subsec:gls_accuracy}
-The forward strategy in Section~\ref{sec:greedy_layer_selection} selects layer components by maximizing the cosine similarity between reconstructed and full-model gradient similarities. In many applications, however, the end goal is \emph{retrieval}: for each paraphrased sample $\spi$, identify its original counterpart $\si$ within the BM25 candidate set $\mathcal{C}_i(b)$ (cf.\ Section~\ref{subsec:bm25_selection}). This subsection introduces a complementary greedy procedure that directly optimizes the \emph{top-1 retrieval accuracy} induced by the currently selected layer components.
-
-\subsubsection{Objective}
-Recall the per-component dot products $\delta^{(l,k)}_{i,j}$, $\delta^{(l,k)}_{i,i}$, and $\delta^{(l,k)}_{j,j}$ from Equation~\ref{eq:layer_dot_products_repeat}. For a set of selected indices $\mathcal{L}\subseteq\mathcal{W}$, define the accumulated dot products
-\[
-D^{\mathcal{L}}_{i,j}=\sum_{(l,k)\in\mathcal{L}}\delta^{(l,k)}_{i,j},\qquad
-D^{\mathcal{L}}_{i,i}=\sum_{(l,k)\in\mathcal{L}}\delta^{(l,k)}_{i,i},\qquad
-D^{\mathcal{L}}_{j,j}=\sum_{(l,k)\in\mathcal{L}}\delta^{(l,k)}_{j,j}.
-\]
-Using Equation~\ref{eq:reconstructed_cosine}, the cosine similarity reconstructed from the selected components is
-\[
-\hat{\gamma}^{\mathcal{L}}_{i,j}
-\;=\;
-\frac{D^{\mathcal{L}}_{i,j}}
-     {\sqrt{D^{\mathcal{L}}_{i,i}}\,
-      \sqrt{D^{\mathcal{L}}_{j,j}}}.
-\]
-Restricting comparisons to the BM25 candidate set $\mathcal{C}_i(b)$ (which, by construction, contains $i$), the accuracy attained by $\mathcal{L}$ is
-\begin{equation}
-\operatorname{accuracy}^{(b)}_{\mathcal{L}}(D_p,D)
-\;:=\;
-\frac{1}{N}\sum_{i=0}^{N}
-\Bigl[
-\hat{\gamma}^{\mathcal{L}}_{i,i}
->
-\max_{j\in\mathcal{C}_i(b)\setminus\{i\}}
-\hat{\gamma}^{\mathcal{L}}_{i,j}
-\Bigr].
-\label{eq:accuracy_bm25_reconstructed}
-\end{equation}
-The greedy rule is to add, at each step, the single layer component whose inclusion yields the largest \emph{current} value of Equation~\ref{eq:accuracy_bm25_reconstructed}. As above, all statements apply identically when replacing $\spi$ with $\smi$.
-
-\subsubsection{Algorithm}
-The procedure below maintains accumulated dot products over all $(i,j)$ pairs and evaluates the accuracy objective after tentatively adding each remaining component. To ensure well-defined divisions, a small $\varepsilon>0$ is added in denominators.
 \begin{algorithm}[htb]
 \caption{Forward Greedy Layer Selection by Accuracy}
 \label{alg:greedy_layer_selection_accuracy}
 \DontPrintSemicolon
 \KwData{
 \begin{tabular}{@{}l@{}}
-BM25 candidate index sets $\{\mathcal{C}_i(b)\}_{i=0}^{N}$ (each $\mathcal{C}_i(b)$ contains $i$)\\
+BM25 candidate index sets $\{\mathcal{C}_i(b)\}_{i=1}^{N}$ (each $\mathcal{C}_i(b)$ contains $i$)\\
 Precomputed per-component dot products $\bigl\{\delta^{(l,k)}_{i,j}, \delta^{(l,k)}_{i,i}, \delta^{(l,k)}_{j,j}\bigr\}$\\
 Set of layer indices $\mathcal{W}$, small constant $\varepsilon>0$
 \end{tabular}
@@ -591,14 +536,14 @@ $\mathcal{L}\gets\varnothing$, \quad $\mathcal{R}\gets\mathcal{W}$ (remaining in
     $\widetilde{D}_{j,j}\gets D_{j,j}+\delta^{(l,k)}_{j,j}$.\;
     \tcp{Compute reconstructed similarities $\hat{\gamma}^{\mathcal{L}\cup\{(l,k)\}}_{i,j}$}
     $\hat{\gamma}_{i,j}\gets \widetilde{D}_{i,j}\big/\bigl(\sqrt{\widetilde{D}_{i,i}}\sqrt{\widetilde{D}_{j,j}}+\varepsilon\bigr)$ for all $(i,j)$.\;
-    \tcp{Evaluate accuracy of Equation~\ref{eq:accuracy_bm25_reconstructed}}
-    $a \gets \frac{1}{N}\sum_{i=0}^{N}\Bigl[\hat{\gamma}_{i,i}>\max_{j\in\mathcal{C}_i(b)\setminus\{i\}}\hat{\gamma}_{i,j}\Bigr]$.\;
+    \tcp{Evaluate accuracy of \autoref{eq:accuracy_bm25_reconstructed}}
+    $a \gets \frac{1}{N}\sum_{i=1}^{N}\Iverson*{\hat{\gamma}_{i,i}>\max_{j\in\mathcal{C}_i(b)\setminus\{i\}}\hat{\gamma}_{i,j}}$.\;
     \If{$a > a^\star$}{
       $a^\star\gets a$, \quad $(l^\star,k^\star)\gets(l,k)$, \quad save $\widetilde{D}$ as current best.
     }
   }
   \tcp{Commit best index of this round}
-  $D_{i,j}\gets \widetilde{D}_{i,j}$,\quad $D_{i,i}\gets \widetilde{D}_{i,i}$,\quad $D_{j,j}\gets \widetilde{D}_{j,j}$.\;
+  $D_{i,j}\gets \text{best saved } \widetilde{D}_{i,j}$,\quad $D_{i,i}\gets \text{best saved } \widetilde{D}_{i,i}$,\quad $D_{j,j}\gets \text{best saved } \widetilde{D}_{j,j}$.\;
   $\mathcal{L}\gets \mathcal{L}\cup\{(l^\star,k^\star)\}$,\quad
   $\mathcal{R}\gets \mathcal{R}\setminus\{(l^\star,k^\star)\}$.\;
   \textbf{Store} $((l^\star,k^\star), a^\star)$ in the output list.\;
@@ -606,11 +551,35 @@ $\mathcal{L}\gets\varnothing$, \quad $\mathcal{R}\gets\mathcal{W}$ (remaining in
 \Return ordered list.
 \end{algorithm}
 
+\subsection{Algorithm Properties}
+
 \subsubsection{Complexity}
-Let $L_\text{tot}=|\mathcal{W}|$ be the number of layer components and $P=\sum_{i}|\mathcal{C}_i(b)|=N\cdot b$ the number of paraphrased–candidate pairs. Each greedy iteration scans all remaining components and performs $\mathcal{O}(P)$ vector operations to update accumulators and evaluate Equation~\ref{eq:accuracy_bm25_reconstructed}, resulting in a worst-case complexity of $\mathcal{O}(L_\text{tot}^2 P)$, analogous to Algorithm~\ref{alg:greedy_layer_selection}.
+Let $L_\text{tot}=|\mathcal{W}|$ be the total number of layer components and $P = N \cdot b$ be the number of paraphrased–candidate pairs. Each greedy iteration must scan all remaining components. Inside this loop, updating the accumulators and evaluating the objective score involves $\mathcal{O}(P)$ vector operations. This results in a worst-case complexity of $\mathcal{O}(L_\text{tot}^2 P)$ for both algorithms. In practice, the algorithms can be stopped early once the objective score plateaus, but they are run to completion in this analysis to gain full insight into component contributions.
 
-\subsubsection{Numerical details and ties}
-A very small $\varepsilon$ in the denominator prevents divisions by zero. When $D^{\mathcal{L}}_{i,i}D^{\mathcal{L}}_{j,j}\approx 0$, the corresponding $\hat{\gamma}_{i,j}$ is set to a well-defined finite value (e.g.\ zero or $-\infty$ before the comparison), which leaves the top-1 decision unchanged for well-conditioned pairs. Ties in the $\max$ over $j$ are broken deterministically (e.g.\ by index order). As in Section~\ref{subsec:intermediate_results}, storing and re-using component-wise dot products enables efficient recomputation without ever materializing full model-sized gradient vectors.
+\subsubsection{Implementation Details and Variants}
+For numerical stability, a small constant $\varepsilon > 0$ is added to denominators to prevent division by zero. This is crucial if a gradient vector for a component (or a sum of them) happens to be a zero vector. The implementation relies heavily on vectorized operations to maintain an efficient per-iteration cost.
+\\\\
+While the focus of this work is on \emph{forward selection}, alternative greedy strategies exist. \emph{Backward elimination} starts with the full set of components and iteratively removes the least important one. More advanced methods like \emph{beam search} could also be used to explore a wider range of subsets. However, forward selection is computationally efficient as it allows for simple updates to the running accumulators without needing to rematerialize large gradient vectors.
 
-\subsubsection{Relation to similarity-based selection.}
-Whereas Algorithm~\ref{alg:greedy_layer_selection} optimizes the agreement between reconstructed and full-model similarities (a \emph{proxy} for retrieval), Algorithm~\ref{alg:greedy_layer_selection_accuracy} directly optimizes the retrieval objective in Equation~\ref{eq:accuracy_bm25_reconstructed}. The two criteria can favor different components: layers that most closely track global similarity structure need not be those that most improve top-1 decisions within the BM25 candidate sets. In practice, both views are informative and can be reported jointly. 
+\subsection{Random Projection as a Baseline}\label{subsec:random_projection_as_a_baseline}
+To validate that the Greedy Layer Selection algorithm identifies a genuinely influential subset of layer components, its performance is compared with a random projection baseline. This baseline helps to answer the question: Does the greedy method significantly outperform a random selection of an equivalent number of parameters?
+\\\\
+The \acrfull{jl} lemma suggests that even a random projection can preserve the geometry of the data, making it a valid baseline \cite{johnson_lindenstrauss}. In this context, the baseline is constructed by projecting the entire gradient vector into a lower-dimensional space. The full, high-dimensional gradient vector for a sample $s_i$ is denoted by $\vXsi[\theta] \in \mathbb{R}^M$. A random projection matrix $\mathbf{R} \in \mathbb{R}^{d \times M}$, where $d \ll M$, is used to map this gradient to a lower-dimensional space. The projected gradient vector, $\mathbf{p}(s_i) \in \mathbb{R}^d$, is defined as:
+\begin{equation}
+    \mathbf{p}(s_i) \coloneqq \frac{1}{\sqrt{d}} \mathbf{R} \, \vXsi[\theta]
+\end{equation}
+where $d$ is the target dimension of the projection \cite{DBLP:journals/corr/abs-2110-13970}.
+\\\\
+However, due to computational constraints that prevent materializing the full gradient vector $\vXsi[\theta]$ at once, a layer-wise projection strategy is implemented. For each layer component $\Wlk$, a separate random matrix $\mathbf{R}^{(l,k)} \in \mathbb{R}^{d_{l,k} \times |\Wlk|}$ is used to project the corresponding layer gradient $\vXsi[\Wlk]$, where $d_{l,k}$ is the projection dimension for that layer, proportional to its number of parameters $|\Wlk|$. The final low-dimensional representation is obtained by concatenating these individual projections:
+\begin{equation}
+    \mathbf{p}(s_i) \coloneqq \operatorname{col}\left( \frac{1}{\sqrt{d_{0,0}}} \mathbf{R}^{(0,0)} \vXsi[\W^{(0,0)}], \dots, \frac{1}{\sqrt{d_{L,K_L}}} \mathbf{R}^{(L,K_L)} \vXsi[\W^{(L,K_L)}] \right).
+\end{equation}
+The cosine similarity is then computed between these resulting down projected gradient vectors $\mathbf{p}(s_i)$ and $\mathbf{p}(s_j)$ for each sample pair.
+\\\\
+The comparison is performed as follows:
+\begin{enumerate}
+    \item The {full-model gradient similarity} is computed for each sample pair $(\spi, \sj)$ to establish a ground truth. This involves calculating the gradient for each sample, flattening the gradient tensors for all layers into a single high-dimensional vector $\vXsi[\theta]$, and then computing the cosine similarity between these flattened vectors.
+    \item The Greedy Layer Selection (Algorithm~\ref{alg:greedy_layer_selection}) is executed to iteratively build a subset of layer components whose combined gradients best optimize the given objective.
+    \item A layer-wise random projection of the gradients is performed as a baseline. For each sample, the gradient vector of every individual layer component $\vXsi[\Wlk]$ is projected separately into a lower-dimensional space. These individual projected vectors are then concatenated to form a single, final low-dimensional representation of the full model gradient.
+    \item Finally, the cosine similarity is calculated between these concatenated, low-dimensional projected gradient vectors for each sample pair. The results of this baseline are then compared against full model gradient scores as well. 
+\end{enumerate}

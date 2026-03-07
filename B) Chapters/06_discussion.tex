@@ -1,8 +1,44 @@
-\chapter{Is the Full Model Gradient a good Baseline?}
+\chapter{Discussion}\label{cha:discussion}
+This chapter synthesizes the empirical findings to critically evaluate the \emph{full model gradient} as a baseline for instance-level, gradient-based explanations. The discussion first assesses the suitability of the full gradient as a benchmark across different experimental settings. It then delves into the architectural insights revealed by decomposing the gradient, before addressing the central question of this thesis: whether to select targeted components or project the full gradient when creating compact surrogates. Finally, it outlines the limitations of this work and suggests avenues for future research.
 
-\section{Layer Analysis}
-\fxnote{Analyze layer in terms of dimensionality, location, etc. and why they contribute what they contribute}
+\section{Evaluating the Full Model Gradient as a Baseline}
+The empirical results demonstrate that the suitability of the full model gradient as a baseline is highly context-dependent, varying significantly with the nature of the input transformation.
 
-\section{Comparison}
-\fxnote{comparison of random projections, layer selection, etc.}
-\fxnote{How do the findings relate to the current literature in regard to layer selection}
+\subsection{In the Paraphrased Setting: A Performance Ceiling}
+In the \emph{paraphrased setting}, where input semantics are preserved, the full-model gradient serves as a robust \textbf{performance ceiling}. It achieves near-perfect retrieval accuracy of $0.993$ within the BM25-selected candidate set (\autoref{tab:model_accuracy}). However, this high performance is not unique to the full gradient. Strikingly, individual architectural components, particularly \acrshort{mlp} projections and the attention output projection, attain comparable, and sometimes superior, accuracy on their own (\autoref{tab:average_accuracy_layer_component}). The cosine similarities of scores induced by these single components also show exceptionally high alignment with the full gradient (means $\gtrsim 0.98$, see \autoref{tab:average_cosine_similarity_full_gradient_comparison}).
+\\\\
+This indicates that under paraphrasing, the gradient direction relevant for instance identification is stable and broadly distributed across the model's architecture. The key question in this context is not whether a surrogate can match the baseline, but rather how efficiently, in terms of parameter budget and computational cost, it can reach this performance ceiling.
+
+\subsection{In the Model-Generated Setting: A Weak and Misleading Benchmark}
+In the \emph{model-generated setting}, where the model re-synthesizes a response, the full gradient's performance collapses, making it a \textbf{weak and potentially misleading baseline}. Its retrieval accuracy plummets to $0.218$, only marginally better than the random-guess baseline of $0.2$ (\autoref{tab:model_accuracy}). The signal of the full gradient appears diluted by weaker layer components, as even small, greedily-selected parameter subsets consistently outperform it.
+\\\\
+Crucially, a surrogate's ability to preserve the global geometry of the full-gradient similarity space is not a sufficient condition for high retrieval performance. For instance, components that best approximate the full gradient's similarity structure (e.g., attention output and \acrshort{mlp} down projections, with $\rho \gtrsim 0.63$) do not necessarily yield the highest retrieval accuracy (\autoref{tab:average_accuracy_layer_component}). Therefore, evaluating surrogates in this setting requires prioritizing task-aligned metrics like retrieval accuracy over geometric alignment to the full gradient.
+
+\section{Architectural Insights from Gradient Decomposition}
+The layer-wise analysis provides novel insights into how instance-specific information is encoded in the gradients of the Transformer architecture.
+
+\subsection{Asymmetric Contribution of Layer Components}
+A consistent finding is that different architectural components contribute asymmetrically to the retrieval task. The \acrshort{mlp} blocks and the attention $Q$ and $O$ projections consistently carry more task-relevant information than the $K$ and $V$ projections. This highlights the significance of a component's \textbf{functional role} over its parameter count in determining its explanatory power.
+
+\subsection{Non-Monotonicity of Performance with Dimensionality}
+The greedy selection experiments reveal a non-monotonic relationship between the number of included parameters and retrieval accuracy. For both settings, a small, optimally selected subset of layers can achieve higher accuracy than the full model gradient (\autoref{fig:greedy_layer_selection_accuracy}). As more, less-informative layers are added, performance degrades, eventually converging toward the full gradient's baseline score. This suggests that adding more components can introduce noise that harms performance on the targeted retrieval task.
+
+\subsection{Divergent Depth Profiles}
+The distribution of influential gradients across model depth differs markedly between the two settings. In the paraphrased setting, accuracy is high and relatively stable across all layers. In contrast, in the model-generated setting, performance is strongest in the initial and final layers, with a noticeable dip in the middle layers (\autoref{fig:accuracy_over_layer_depth_attention_vs_mlp_model_generated}). This suggests that early-layer features (closer to input) and late-layer features (closer to output) retain some alignment with the original sample, while intermediate layers, which perform more abstract transformations, diverge more significantly.
+
+\section{Implications: To Select or to Project?}
+The findings provide a clear, task-dependent answer to the central question of whether to select or project components when building a low-dimensional representation of the gradient.
+
+\subsection{For Maximizing Retrieval Accuracy: Select}
+If the primary objective is to build a compact representation that maximizes retrieval accuracy, then \textbf{targeted selection is the superior strategy}. The greedy selection algorithm, particularly when optimized directly for accuracy, identifies a small subset of components (typically from \acrshort{mlp} and attention $Q/O$ blocks) that outperforms both the full model gradient and random projections at comparable parameter budgets. Furthermore, the selection approach is vastly more computationally efficient. The pre-computation and greedy search completed in hours, whereas the random projection baseline required several hundred hours for the same dataset (\autoref{tab:execution_times}). For practical XAI applications where instance-based explanations are framed as a retrieval problem, targeted selection is more effective and scalable.
+
+\subsection{For Preserving Global Gradient Geometry: Project}
+If the objective is to create a low-dimensional surrogate that best preserves the geometric relationships of the full-gradient space, then \textbf{projection is a highly effective, albeit costly, method}. In line with the Johnson-Lindenstrauss lemma, random projections maintain high fidelity to the full gradient's similarity structure ($\rho$) even at very low dimensions (\autoref{fig:greedy_layer_selection}). If the goal is a compressed representation for tasks that depend on this overall geometry, projection is a viable approach, provided the substantial computational overhead is acceptable.
+
+\section{Limitations and Future Research Directions}
+The conclusions of this work should be considered in light of its limitations, each of which opens avenues for future research.
+\begin{itemize}
+    \item \textbf{Model and Data Specificity:} The experiments were conducted on a single 1B-parameter model (\texttt{AMD-OLMo-1B-SFT}) and one high-quality instruction-tuning dataset (LIMA). The extent to which these findings generalize to different model architectures, larger model scales, diverse datasets, and other tasks remains an open question. Future work should replicate this analysis across a wider range of models and data domains.
+    
+    \item \textbf{Static Analysis:} The analysis is static, using gradients computed at a single, final model checkpoint. Dynamic methods that track influence throughout the training process, as discussed in \nameref{subsubsec:dynamic_gradient_based_influence_estimation}, could provide a more complete picture of how training data shape model behavior.
+\end{itemize}

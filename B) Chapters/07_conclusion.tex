@@ -1,5 +1,4 @@
 \chapter{Conclusion}
-asdf
-
-\section{Future Outlook}
-asdf
+This thesis systematically evaluates low-dimensional representations for instance-based explanations, addressing the central question of whether to \textit{select} architectural components or \textit{project} the full gradient. The findings demonstrate a clear and practical answer: for the goal of retrieving influential training examples, a targeted selection of a small subset of gradient components is both more accurate and computationally efficient than projection. The results pinpoint these influential components as originating primarily from the \acrshort{mlp} and attention query/output blocks.
+\\\\
+This work also challenges the role of the full model gradient as a default baseline. The analysis reveals it as a less effective approach for instance-based explanation, showing that smaller, architecturally-informed representations can provide a clearer and more discriminative signal. While projection offers remarkable fidelity in preserving the global geometry of the full-gradient space, its prohibitive runtime makes it less suitable for practical applications. Consequently, the findings advocate for choosing small, architecturally aware representations over geometry-preserving projections when building efficient and effective instance-based explanation tools.

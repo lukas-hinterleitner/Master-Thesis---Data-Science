@@ -1,8 +1,9 @@
 \chapter{Appendix}
 \section{Nomenclature}
+The following tables define the key symbols and notations used throughout this thesis for clarity and reference.
 
 % ---------- General indices & counts ----------
-\begin{table}[H]
+\begin{table}[htb!]
     \centering
     \small
     \begin{tabular}{ll}
@@ -11,8 +12,8 @@
         $N$ & Number of samples in the (filtered) original dataset $D$ \\
         $i, j$ & Sample indices, $i$ for (para-/model-generated) query, $j$ for original candidate \\
         $a$ & Training iteration index \\
-        $l \in \{0,\dots,L\}$ & Layer index (0-based) \\
-        $k \in \{0,\dots,K_l\}$ & Component index within layer $l$ \\
+        $l \in \{1,\dots,L\}$ & Layer index \\
+        $k \in \{1,\dots,K_l\}$ & Component index within layer $l$ \\
         $b$ & Size of the BM25 candidate set $\mathcal{C}_i(b)$ \\
         $P=N\cdot b$ & \#pairs (paraphrased $\times$ BM25 candidates) used in evaluation \\
         \hline
@@ -27,18 +28,18 @@
 \end{table}
 
 % ---------- Datasets, samples, tokens ----------
-\begin{table}[H]
+\begin{table}[htb!]
     \centering
     \small
     \begin{tabular}{ll}
         \textbf{Symbol} & \textbf{Meaning} \\
         \hline
-        $D=\{s_i\}_{i=0}^{N}$ & Original dataset (instruction–response pairs) \\
-        $D_p=\{s_{p_i}\}_{i=0}^{N}$ & Paraphrased dataset (prompt and response paraphrased) \\
-        $D_m=\{s_{m_i}\}_{i=0}^{N}$ & Model-generated dataset (paraphrased prompts, model outputs) \\
+        $D=\{s_i\}_{i=1}^{N}$ & Original dataset (instruction–response pairs) \\
+        $D_p=\{s_{p_i}\}_{i=1}^{N}$ & Paraphrased dataset (prompt and response paraphrased) \\
+        $D_m=\{s_{m_i}\}_{i=1}^{N}$ & Model-generated dataset (paraphrased prompts, model outputs) \\
         $s_i=(s_{i_P}, s_{i_G})$ & Sample $i$: prompt $s_{i_P}$ and generation $s_{i_G}$ \\
-        $s_{i_P}=s_i^{-P_i},\dots,s_i^{-1}$ & Prompt tokens of length $P_i$ \\
-        $s_{i_G}=s_i^{0},\dots,s_i^{G_i}$ & Generation tokens of length $G_i$ \\
+        $s_{i_P}=s_i^{-P_i},\dots,s_i^{0}$ & Prompt tokens of length $P_i$ \\
+        $s_{i_G}=s_i^{1},\dots,s_i^{G_i}$ & Generation tokens of length $G_i$ \\
         $s_{p_i}=(s_{p_{i_P}}, s_{p_{i_G}})$ & Paraphrased sample \\
         $s_{m_i}=(s_{m_{i_P}}, s_{m_{i_G}})$ & Model-generated sample ($s_{m_{i_P}}=s_{p_{i_P}}$) \\
         $\operatorname{LLM}_{\text{para}}(\cdot)$ & Paraphrasing model/function \\
@@ -49,14 +50,14 @@
 \end{table}
 
 % ---------- Loss & training ----------
-\begin{table}[H]
+\begin{table}[htb!]
     \centering
     \small
     \begin{tabular}{ll}
         \textbf{Symbol} & \textbf{Meaning} \\
         \hline
         $\mathcal{L}(s_i^j,\theta)$ & Token-level loss at token $j$ of sample $i$ \\
-        $\mathcal{L}(s_i,\theta)=\frac{1}{G_i}\sum_{j=0}^{G_i}\mathcal{L}(s_i^j,\theta)$ & Per-sample loss \\
+        $\mathcal{L}(s_i,\theta)=\frac{1}{G_i}\sum_{j=1}^{G_i}\mathcal{L}(s_i^j,\theta)$ & Per-sample loss \\
         $p_\theta(s_i^j \mid s_i^{-P_i},\dots,s_i^{j-1})$ & Next-token probability under the model \\
         $\nabla_{\theta}\mathcal{L}(s_i,\theta)$ & Gradient of loss w.r.t.\ $\theta$ for sample $s_i$ \\
         $\theta_{a+1}=\theta_a-\eta_a\nabla_{\theta}\mathcal{L}(s_a,\theta_a)$ & Gradient descent update \\
@@ -66,7 +67,7 @@
 \end{table}
 
 % ---------- Architecture & parameters ----------
-\begin{table}[H]
+\begin{table}[htb!]
     \centering
     \small
     \begin{tabular}{ll}
@@ -92,7 +93,7 @@
 \end{table}
 
 % ---------- Operators & gradient flattening ----------
-\begin{table}[H]
+\begin{table}[htb!]
     \centering
     \small
     \begin{tabular}{ll}
@@ -103,14 +104,13 @@
         $\odot,\ \oslash$ & Elementwise product and elementwise division \\
         $\mathbf{v}_{\mathbf{W}^{(l,k)}}(s_i)=\operatorname{vec}_r\big(\nabla_{\mathbf{W}^{(l,k)}}\mathcal{L}(s_i,\theta_T)\big)$ & Flattened gradient for component $(l,k)$ \\
         $\mathbf{v}_{\theta}(s_i)=\operatorname{col}\big(\mathbf{v}_{\mathbf{W}^{(0,0)}}(s_i),\dots,\mathbf{v}_{\mathbf{W}^{(L,K_L)}}(s_i)\big)$ & Full flattened gradient for $s_i$ \\
-        $\mathbf{v}_{\bullet}(s_i)$, $\mathbf{v}_{\bullet}[\mathcal{S}]$ & Same, restricted to a component or a set $\mathcal{S}\subseteq\mathcal{W}$ \\
     \end{tabular}
     \caption{Operators and flattened gradient vectors.}
     \label{tab:nomenclature-ops}
 \end{table}
 
 % ---------- Similarities & scores ----------
-\begin{table}[H]
+\begin{table}[htb!]
     \centering
     \small
     \begin{tabular}{ll}
@@ -132,7 +132,7 @@
 \end{table}
 
 % ---------- Candidate selection & metrics ----------
-\begin{table}[H]
+\begin{table}[htb!]
     \centering
     \small
     \begin{tabular}{ll}
@@ -151,7 +151,7 @@
 \end{table}
 
 % ---------- Greedy layer selection ----------
-\begin{table}[H]
+\begin{table}[htb!]
     \centering
     \small
     \begin{tabular}{ll}
@@ -185,27 +185,18 @@
     \label{tab:nomenclature-rp}
 \end{table}
 
-
-\section{AMD-OLMo-1B-SFT}
-The number of parameters as a horizontal bar graph is shown in Figure~\ref{fig:parameters_per_layer_amd_olmo}.
-\begin{figure}[ht]
-    \centering
-    \includegraphics[width=0.63\textwidth]{figures/parameters_per_layer.png}
-    \caption{Visual representation of the parameters per layer component for model \texttt{AMD-OLMo-1B-SFT} on a logarithmic scale.}
-    \label{fig:parameters_per_layer_amd_olmo}
-\end{figure}
-
 \section{Preliminary Analysis of Gradient Dot Products}
-A preliminary analysis of gradient dot products between $25$ paraphrased and original samples is shown in Figure~\ref{fig:preliminary_analysis_dot_products}. As illustrated there, the main diagonal contains significantly higher values, indicating that the model is able to find the corresponding original data points. 
+To validate the core assumption that paraphrased samples are most similar to their originals, a preliminary analysis was conducted on a small subset of the data. Figure~\ref{fig:preliminary_analysis_dot_products} visualizes the dot products of the full-model gradients between 25 paraphrased samples and their original counterparts. As illustrated there, the main diagonal contains significantly higher values, indicating that the model is able to find the corresponding original data points.
 
-\begin{figure}[ht]
+\begin{figure}[htb!]
     \centering
-    \includegraphics[width=1\textwidth]{figures/preliminary_analysis_dot_products.png}
+    \includegraphics[width=0.95\textwidth]{figures/preliminary_analysis_dot_products.png}
     \caption{Preliminary analysis of gradient dot products between paraphrased and original samples.}
     \label{fig:preliminary_analysis_dot_products}
 \end{figure}
 
 \section{Dataset Examples}
+This section provides concrete examples from the LIMA dataset to illustrate the transformations applied in the \emph{paraphrased} and \emph{model-generated} settings.
 
 \subsection{Paraphrased}\label{subsec:appendix_paraphrased_sample}
 The paraphrased equivalent for the presented example for the \emph{LIMA} dataset illustrated in Subsection~\ref{subsec:lima_dataset}.
@@ -276,41 +267,37 @@ Model-generated assistant message $s_{m_{0_G}}$:
 \end{verbatim}
 
 \section{Results}
+This section contains supplementary figures that provide a more detailed, layer-by-layer breakdown of the results presented in the main body of the thesis.
 
 \subsection{Accuracy per Layer Component}
+The following figure visualizes the retrieval accuracy for each individual layer component.
 
 \subsubsection{Paraphrased}
-\begin{figure}[ht]
+Figure~\ref{fig:paraphrased_accuracy_per_layer} shows the retrieval accuracy for each layer component in the paraphrased setting, complementing the aggregated view in the main results chapter.
+\begin{figure}[htb!]
     \centering
-    \includegraphics[width=0.63\textwidth]{figures/results/paraphrased/accuracy_per_layer.png}
+    \includegraphics[width=1\textwidth]{figures/results/paraphrased/accuracy_per_layer.png}
     \caption{Accuracy per layer in the paraphrased setting}
     \label{fig:paraphrased_accuracy_per_layer}
 \end{figure}
 
-\subsubsection{Model-generated}
-\begin{figure}[ht]
-    \centering
-    \includegraphics[width=0.63\textwidth]{figures/results/model-generated/accuracy_per_layer.png}
-    \caption{Accuracy per layer in the model-generated setting}
-    \label{fig:model_generated_accuracy_per_layer}
-\end{figure}
-
 \subsection{Comparison between Layer Components and Full Gradient}
+The following figures illustrate the cosine similarity between the score vectors of each individual layer component and the score vector of the full model gradient, broken down by layer depth.
 
 \subsubsection{Paraphrased}
-\begin{figure}[ht]
+Figure~\ref{fig:paraphrased_layer_comparison_full_gradient} details this comparison for the paraphrased setting.
+\begin{figure}[htb!]
     \centering
-    \includegraphics[width=0.63\textwidth]{figures/results/paraphrased/layer_comparison_full_gradient.png}
+    \includegraphics[width=1\textwidth]{figures/results/paraphrased/layer_comparison_full_gradient.png}
     \caption{Comparison of single layer component and full model gradient scores for the paraphrased setting.}
     \label{fig:paraphrased_layer_comparison_full_gradient}
 \end{figure}
 
 \subsubsection{Model-generated}
-
-\subsubsection{Paraphrased}
-\begin{figure}[ht]
+Similarly, Figure~\ref{fig:model_generated_layer_comparison_full_gradient} shows the comparison for the model-generated setting.
+\begin{figure}[htb!]
     \centering
-    \includegraphics[width=0.63\textwidth]{figures/results/model-generated/layer_comparison_full_gradient.png}
+    \includegraphics[width=1\textwidth]{figures/results/model-generated/layer_comparison_full_gradient.png}
     \caption{Comparison of single layer component and full model gradient scores for the model-generated setting.}
     \label{fig:model_generated_layer_comparison_full_gradient}
 \end{figure}
