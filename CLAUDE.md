@@ -12,7 +12,8 @@ This is a **LaTeX project** synced with Overleaf. There is no code to build/test
 
 - `main.tex` — Document root; uses `UniVieCS_Thesis` document class
 - `packages_macros.tex` — Additional packages and custom math macros (weight matrices, similarity functions, Iverson brackets)
-- `UniVieCS_Thesis.cls` / `UniVieCS_Thesis_TexLive19.cls` — University of Vienna thesis class files (do not modify)
+- `UniVieCS_Thesis.cls` — University of Vienna thesis class used by `main.tex` (do not modify)
+- `UniVieCS_Thesis_TexLive19.cls` — unused fallback variant for TeX Live 2019; swap it in only if the main class fails on an old TeX distribution (do not modify)
 - `bibliography.bib` — BibTeX references (alpha style)
 - `A) Front Matter/` — Title page, metadata, abstracts (English + German), acknowledgements
 - `B) Chapters/` — Thesis chapters (01–07): introduction, related work, methodology (model, setup, results), discussion, conclusion
@@ -31,9 +32,13 @@ pdflatex main.tex
 pdflatex main.tex
 ```
 
+- **Do not commit build artifacts** (`.aux`, `.bbl`, `.blg`, `.glo`, `.gls`, `.log`, `.out`, `.toc`, …) — `.gitignore` is currently empty, so a local compile will show them all as untracked.
+- Chapters are pulled in via `\input` (not `\include`), so `\includeonly` cannot be used for partial compiles.
+- No `-shell-escape` needed — listings use the `listings` package, not `minted`.
+
 ## Key Conventions
 
-- **Language**: British English (`babel` with `british` option)
+- **Language**: British English (`babel` loads `[ngerman, british]`; `british` is the main language, `ngerman` is required for the German abstract in `A) Front Matter/kurzfassung.tex` — do not remove it)
 - **Bibliography**: `alpha` style via BibTeX (not biblatex)
 - **Glossaries/Acronyms**: Defined in `C) Back Matter/acronyms.tex` and `glossary.tex`, loaded before `\begin{document}`
 - **Review comments**: Uses `fixme` package with author `TTW` (green); draft mode is toggled via `\fxsetup{status=draft}` in `main.tex` (currently commented out, so fixme notes are hidden in output)
